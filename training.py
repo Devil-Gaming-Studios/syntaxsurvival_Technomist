@@ -6,7 +6,7 @@ import os
 from model import build_model_from_config, suggest_model_config
 
 # 🔹 CHANGE THIS
-SERVER_URL = "https://your-app.onrender.com"
+SERVER_URL = "https://syntaxsurvival-technomist-2.onrender.com"
 
 # ================================
 # 📊 TABULAR DATA TRAINING
