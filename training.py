@@ -53,7 +53,7 @@ def train_tabular(file_path, use_server_model=True, model_id=None):
 # ================================
 # 🖼️ IMAGE DATA TRAINING
 # ================================
-def train_image(folder_path, use_server_model=True, model_id="xray"):
+def train_image(folder_path,epochs, use_server_model=True, model_id="xray"):
 
     from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
@@ -92,7 +92,7 @@ def train_image(folder_path, use_server_model=True, model_id="xray"):
     # ================================
     # 🚀 Train
     # ================================
-    model.fit(train_data, epochs=3)
+    model.fit(train_data, epochs)
 
     # ================================
     # 📤 Send Weights
