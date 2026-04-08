@@ -11,7 +11,7 @@ SERVER_URL = "https://your-app.onrender.com"
 # ================================
 # 📊 TABULAR DATA TRAINING
 # ================================
-def train_tabular(file_path, use_server_model=True, model_id=None):
+def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
 
     # Load CSV
     data = pd.read_csv(file_path)
@@ -40,7 +40,7 @@ def train_tabular(file_path, use_server_model=True, model_id=None):
     # ================================
     # 🚀 Train
     # ================================
-    model.fit(X, y, epochs=5, verbose=1)
+    model.fit(X, y, epochs, verbose=1)
 
     # ================================
     # 📤 Send Weights
