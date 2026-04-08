@@ -140,8 +140,7 @@ def train_and_upload(path, use_server_model=True, model_id=None):
 
     data_type = detect_data_type(path)
 
-#testing data is not yet processed
-#uploads data automatically
+
 
     if data_type == "tabular":
         return train_tabular(path, use_server_model, model_id)
@@ -151,3 +150,6 @@ def train_and_upload(path, use_server_model=True, model_id=None):
 
     else:
         return "Unsupported data format"
+#==========================================
+#testing data is not yet processed
+#uploads data automatically
