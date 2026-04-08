@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MediCare AI Portal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+  <h1>🩺 MediCare AI Portal</h1>
+
+  <!-- Disease Selection -->
+  <div class="card">
+    <h2>Select Diagnosis Type</h2>
+    <select id="diseaseSelect" onchange="renderForm()">
+      <option value="">-- Select --</option>
+      <option value="diabetes">Diabetes</option>
+      <option value="heart">Heart Disease</option>
+      <option value="covid">COVID (X-ray)</option>
+    </select>
+  </div>
+
+  <!-- Dynamic Form -->
+  <div id="formContainer"></div>
+
+  <!-- Result -->
+  <div id="resultCard" class="card hidden">
+    <h2>🧠 Diagnosis Result</h2>
+    <p id="prediction"></p>
+    <h3>📋 Treatment Plan</h3>
+    <p id="treatment"></p>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
