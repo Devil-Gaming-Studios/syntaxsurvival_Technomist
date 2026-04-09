@@ -12,6 +12,7 @@ import tkinter.font as tkfont
 # ─────────────────────────────────────────
 import training as _train_module
 from training import train_and_upload, upload_weights, predict_disease, detect_data_type, get_models, add_model_to_server
+from diagnose_screen import DiagnoseScreen   # ← NEW
 
 # ─────────────────────────────────────────
 #  MODEL ID MAPPING
@@ -122,6 +123,11 @@ class App(tk.Tk):
     def show_test(self, model, epochs):
         self.clear()
         TestScreen(self, model, epochs)
+
+    # ← NEW
+    def show_diagnose(self, model, epochs):
+        self.clear()
+        DiagnoseScreen(self, model, epochs)
 
 # ─────────────────────────────────────────
 #  LOGIN SCREEN
@@ -1029,13 +1035,16 @@ class ResultScreen(tk.Frame):
         text_widget.config(state="disabled")
         text_widget.pack(fill="x")
 
+        # ── ACTION BUTTONS — Diagnose is placed here, in ResultScreen ──
         btn_row = tk.Frame(body, bg=BG)
         btn_row.pack(pady=16)
 
         styled_button(btn_row, "⬇  Download Weights as JSON",
-                      self._download, secondary=True).pack(side="left", padx=(0, 12))
+                      self._download, secondary=True).pack(side="left", padx=(0, 8))
         styled_button(btn_row, "🧪  Test on New Data",
-                      self._test, secondary=True).pack(side="left", padx=(0, 12))
+                      self._test, secondary=True).pack(side="left", padx=(0, 8))
+        styled_button(btn_row, "🩺  Diagnose Patient",
+                      self._diagnose, secondary=True).pack(side="left", padx=(0, 8))
         styled_button(btn_row, "☁  Upload to Server →",
                       self._upload_to_server).pack(side="left")
 
@@ -1091,11 +1100,14 @@ class ResultScreen(tk.Frame):
     def _test(self):
         self.master.show_test(self.model, self.epochs)
 
+    def _diagnose(self):
+        self.master.show_diagnose(self.model, self.epochs)   # ← NEW
+
     def _upload_to_server(self):
         self.master.show_upload_server(self.model, self.epochs)
 
 # ─────────────────────────────────────────
-#  TEST SCREEN  — FIXED scroll + chart
+#  TEST SCREEN
 # ─────────────────────────────────────────
 class TestScreen(tk.Frame):
     def __init__(self, master, model, epochs):
@@ -1114,14 +1126,12 @@ class TestScreen(tk.Frame):
                  font=("Helvetica", 15, "bold"),
                  bg=GREEN_DARK, fg=WHITE, pady=14).pack()
 
-        # ── Scrollable body ──────────────────────────────────────────────
         outer = tk.Frame(self, bg=BG)
         outer.pack(fill="both", expand=True)
 
         sb = tk.Scrollbar(outer)
         sb.pack(side="right", fill="y")
 
-        # Store canvas as instance variable so _bind_scroll can reach it
         self._scroll_cv = tk.Canvas(outer, bg=BG, highlightthickness=0,
                                     yscrollcommand=sb.set)
         self._scroll_cv.pack(side="left", fill="both", expand=True)
@@ -1130,21 +1140,18 @@ class TestScreen(tk.Frame):
         body = tk.Frame(self._scroll_cv, bg=BG)
         body_win = self._scroll_cv.create_window((0, 0), window=body, anchor="nw")
 
-        # FIX: define callbacks as proper methods at the right scope level
         def _on_cfg(e):
             self._scroll_cv.configure(scrollregion=self._scroll_cv.bbox("all"))
 
         def _on_rsz(e):
             self._scroll_cv.itemconfig(body_win, width=e.width)
 
-        # FIX: _mw defined cleanly at class level via instance method
         body.bind("<Configure>", _on_cfg)
         self._scroll_cv.bind("<Configure>", _on_rsz)
         self._scroll_cv.bind("<MouseWheel>", self._mw)
         self._scroll_cv.bind("<Button-4>",   self._mw)
         self._scroll_cv.bind("<Button-5>",   self._mw)
 
-        # ── Title ──
         top = tk.Frame(body, bg=BG)
         top.pack(fill="x", padx=120, pady=(20, 4))
         tk.Label(top, text="Test on New Data",
@@ -1157,7 +1164,6 @@ class TestScreen(tk.Frame):
                  text=f"Model: {model.title()}  •  Trained for {epochs} epoch(s)",
                  font=("Helvetica", 10), bg=BG, fg=GRAY).pack(anchor="w", padx=120)
 
-        # ── File upload card ──
         card = tk.Frame(body, bg=WHITE, padx=30, pady=24,
                         highlightthickness=1, highlightbackground=BORDER)
         card.pack(fill="x", padx=120, pady=(16, 8))
@@ -1190,7 +1196,6 @@ class TestScreen(tk.Frame):
 
         tk.Frame(body, height=1, bg=BORDER).pack(fill="x", padx=120, pady=8)
 
-        # ── Results area ──
         self.results_card = tk.Frame(body, bg=WHITE, padx=30, pady=24,
                                      highlightthickness=1, highlightbackground=BORDER)
         self.results_card.pack(fill="x", padx=120, pady=(0, 24))
@@ -1204,7 +1209,6 @@ class TestScreen(tk.Frame):
         self.results_body = tk.Frame(self.results_card, bg=WHITE)
         self.results_body.pack(fill="x", pady=(12, 0))
 
-    # ── FIX: _mw is now a proper instance method, always available ──
     def _mw(self, e):
         if e.num == 4:
             self._scroll_cv.yview_scroll(-1, "units")
@@ -1214,7 +1218,6 @@ class TestScreen(tk.Frame):
             self._scroll_cv.yview_scroll(int(-1 * (e.delta / 120)), "units")
 
     def _bind_scroll(self, widget):
-        """Recursively bind mousewheel scroll to all child widgets."""
         widget.bind("<MouseWheel>", self._mw)
         widget.bind("<Button-4>",   self._mw)
         widget.bind("<Button-5>",   self._mw)
@@ -1269,7 +1272,6 @@ class TestScreen(tk.Frame):
                      font=("Helvetica", 10), bg=WHITE, fg=GRAY).pack(anchor="w")
             return
 
-        # ── Summary badges ──
         total = len(results)
         pos   = sum(1 for _, pred, _ , _ in results if "detected" in pred.lower()
                     or "yes" in pred.lower() or "positive" in pred.lower()
@@ -1295,7 +1297,6 @@ class TestScreen(tk.Frame):
 
         tk.Frame(self.results_body, height=1, bg=BORDER).pack(fill="x", pady=(0, 8))
 
-        # ── Column headers ──
         hdr = tk.Frame(self.results_body, bg=GRAY_LITE)
         hdr.pack(fill="x", pady=(0, 2))
         for txt, w in [("#", 4), ("Sample / Row", 24), ("Prediction", 22), ("Confidence", 12)]:
@@ -1303,13 +1304,12 @@ class TestScreen(tk.Frame):
                      bg=GRAY_LITE, fg=TEXT, width=w, anchor="w",
                      padx=6, pady=4).pack(side="left")
 
-        # ── Table ──
         table_frame = tk.Frame(self.results_body, bg=WHITE,
                                highlightthickness=1, highlightbackground=BORDER)
         table_frame.pack(fill="x")
 
         max_rows = min(len(results), 200)
-        for idx, (sample_lbl, pred, conf,corr_value) in enumerate(results[:max_rows]):
+        for idx, (sample_lbl, pred, conf, corr_value) in enumerate(results[:max_rows]):
             row_bg = WHITE if idx % 2 == 0 else GRAY_LITE
             row = tk.Frame(table_frame, bg=row_bg)
             row.pack(fill="x")
@@ -1335,14 +1335,10 @@ class TestScreen(tk.Frame):
                      text=f"Showing first 200 of {len(results)} rows.",
                      font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(6, 0))
 
-        # ── Export button ──
         styled_button(self.results_body, "⬇  Export Results as CSV",
                       lambda: self._export(results), secondary=True).pack(anchor="w", pady=(12, 0))
 
-        # FIX: draw chart BEFORE rebinding scroll so chart widgets also get bound
         self._draw_accuracy_chart(results)
-
-        # FIX: rebind scroll after all widgets are created
         self.after(50, lambda: self._bind_scroll(self.results_body))
 
     def _draw_accuracy_chart(self, results):
@@ -1359,12 +1355,11 @@ class TestScreen(tk.Frame):
                  text="Accuracy and confidence distribution across all predictions.",
                  font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(2, 12))
 
-        # ── Accuracy from GT labels ──
         correct = 0
         incorrect = 0
         has_gt = False
 
-        for sample_lbl, pred, conf,corr_data in results:
+        for sample_lbl, pred, conf, corr_data in results:
             match = re.search(r"GT:\s*(\S+)", sample_lbl)
             if match:
                 has_gt = True
@@ -1374,7 +1369,6 @@ class TestScreen(tk.Frame):
                 pred_positive = any(k in pred_l for k in ("detected", "yes", "positive", "1"))
                 pred_negative = any(k in pred_l for k in ("no disease", "not detected", "no", "negative", "0", "clear"))
 
-                # AFTER
                 gt_positive = gt in ("1", "yes", "positive", "detected") or (gt.replace('.','',1).isdigit() and float(gt) > 0.5)
                 gt_negative = not gt_positive
 
@@ -1406,10 +1400,9 @@ class TestScreen(tk.Frame):
                      text="Ground-truth labels not detected — showing confidence distribution only.",
                      font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w")
 
-        # ── Confidence distribution ──
         conf_bins    = [0] * 10
         parsed_confs = []
-        for _, _, conf_str in results:
+        for _, _, conf_str, _ in results:
             try:
                 val = float(conf_str.replace("%", "").strip())
                 parsed_confs.append(val)
@@ -1434,7 +1427,6 @@ class TestScreen(tk.Frame):
         tk.Label(b, text=f"{avg_conf:.1f}%", font=("Helvetica", 12, "bold"),
                  bg=GRAY_LITE, fg="#185FA5").pack(anchor="w")
 
-        # ── Confidence bar chart ──
         W, H = 680, 180
         PAD_L, PAD_R, PAD_T, PAD_B = 44, 16, 12, 36
 
@@ -1493,7 +1485,6 @@ class TestScreen(tk.Frame):
                            fill=GRAY, anchor="w")
             legend_x += 160
 
-        # ── Accuracy bar (GT only) ──
         if has_gt and (correct + incorrect) > 0:
             tk.Label(chart_frame, text="Correct vs incorrect predictions",
                      font=("Helvetica", 9, "bold"), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(14, 4))
@@ -1533,7 +1524,7 @@ class TestScreen(tk.Frame):
             with open(save_path, "w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(["#", "Sample", "Prediction", "Confidence"])
-                for i, (lbl, pred, conf) in enumerate(results, 1):
+                for i, (lbl, pred, conf, _) in enumerate(results, 1):
                     writer.writerow([i, lbl, pred, conf])
             messagebox.showinfo("Saved", f"Results saved to:\n{save_path}")
         except Exception as e:
