@@ -300,3 +300,136 @@ def train_and_upload(path, epochs, use_server_model=True, model_id=None):
 
     else:
         return "Unsupported data format"
+
+
+# ================================
+# 🔬 PREDICT FROM FILE  ← NEW
+# ================================
+def predict_from_file(path):
+    """
+    Run the trained model on a new dataset file.
+
+    For tabular (.csv):
+        - Encodes categoricals, normalises, runs each row through the model.
+        - Returns list of (row_label, prediction_str, confidence_str).
+        - If the file has a label column (last col) it is used as the row label
+          so you can visually compare ground-truth vs prediction.
+
+    For image (folder):
+        - Expects sub-folders named 'no' and 'yes' (same convention as training).
+        - Returns one result per image file found.
+
+    Returns:
+        list of (sample_label: str, prediction: str, confidence: str)
+        On error raises an exception (caller handles it).
+    """
+    global trained_model, last_config
+
+    if trained_model is None:
+        raise RuntimeError("No trained model found. Please train a model first.")
+
+    data_type = detect_data_type(path)
+
+    # ── TABULAR ──────────────────────────────────────────────────────────
+    if data_type == "tabular":
+        data = pd.read_csv(path)
+
+        for col in data.columns:
+            if data[col].dtype == object:
+                data[col] = pd.Categorical(data[col]).codes
+
+        # Use the last column as ground-truth label if it exists
+        if data.shape[1] > 1:
+            labels = data.iloc[:, -1].values.astype(str)
+            X = data.iloc[:, :-1].values.astype(float)
+        else:
+            labels = [f"Row {i+1}" for i in range(len(data))]
+            X = data.values.astype(float)
+
+        X = X / (np.max(X, axis=0) + 1e-8)
+
+        raw = trained_model.predict(X)
+
+        results = []
+        output_type = last_config.get("output", "binary") if last_config else "binary"
+
+        for i, (row_label, pred_raw) in enumerate(zip(labels, raw)):
+            sample_lbl = f"Row {i+1} (GT: {row_label})"
+
+            if output_type == "binary":
+                prob = float(pred_raw[0])
+                pred_str = "Disease Detected" if prob > 0.5 else "No Disease"
+                conf_str = f"{prob*100:.1f}%"
+
+            elif output_type == "multi_class":
+                cls = int(np.argmax(pred_raw))
+                prob = float(np.max(pred_raw))
+                pred_str = f"Class {cls}"
+                conf_str = f"{prob*100:.1f}%"
+
+            else:  # regression
+                val = float(pred_raw[0])
+                pred_str = f"{val:.4f}"
+                conf_str = "—"
+
+            results.append((sample_lbl, pred_str, conf_str))
+
+        return results
+
+    # ── IMAGE ─────────────────────────────────────────────────────────────
+    elif data_type == "image":
+        from tensorflow.keras.preprocessing import image as keras_image
+
+        EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff"}
+        results = []
+
+        # Walk the folder; try to detect label from sub-folder name
+        for root, dirs, files in os.walk(path):
+            for fname in sorted(files):
+                if os.path.splitext(fname)[1].lower() not in EXTS:
+                    continue
+                fpath = os.path.join(root, fname)
+
+                # Infer ground-truth label from parent folder name if available
+                parent = os.path.basename(root)
+                gt_str  = f" (GT: {parent})" if parent.lower() in ("yes", "no", "0", "1") else ""
+                sample_lbl = fname + gt_str
+
+                try:
+                    img = keras_image.load_img(fpath, target_size=(128, 128))
+                    arr = keras_image.img_to_array(img) / 255.0
+                    arr = np.expand_dims(arr, axis=0)
+                    pred_raw = trained_model.predict(arr, verbose=0)
+
+                    output_type = last_config.get("output", "binary") if last_config else "binary"
+
+                    if output_type == "binary":
+                        prob = float(pred_raw[0][0])
+                        pred_str = "Detected (Yes)" if prob > 0.5 else "Not Detected (No)"
+                        conf_str = f"{prob*100:.1f}%"
+                    elif output_type == "multi_class":
+                        cls  = int(np.argmax(pred_raw[0]))
+                        prob = float(np.max(pred_raw[0]))
+                        pred_str = f"Class {cls}"
+                        conf_str = f"{prob*100:.1f}%"
+                    else:
+                        val = float(pred_raw[0][0])
+                        pred_str = f"{val:.4f}"
+                        conf_str = "—"
+
+                    results.append((sample_lbl, pred_str, conf_str))
+
+                except Exception as img_err:
+                    results.append((sample_lbl, f"Error: {img_err}", ""))
+
+        if not results:
+            raise RuntimeError(
+                "No image files found in the selected folder.\n"
+                "Make sure the folder contains .jpg / .png images "
+                "(optionally in 'yes' / 'no' sub-folders)."
+            )
+
+        return results
+
+    else:
+        raise ValueError(f"Unsupported data format for path: {path}")
