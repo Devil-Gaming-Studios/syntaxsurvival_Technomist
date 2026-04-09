@@ -27,7 +27,7 @@ custom_configs    = {}   # configs for custom models
 # ================================
 # 🤖 GEMINI HELPER
 # ================================
-GEMINI_API_KEY = "AIzaSyD2JE1mtrjdpdsaO3qBdHbvGGQcl5eyHkI"
+GEMINI_API_KEY = "AIzaSyAGBnvNagvvfNP1c04K3ipIK_xLobnt3Ds"
 
 # ================================
 # 🤖 GEMINI HELPER (STREAMING)
