@@ -4,4 +4,3 @@ numpy==1.24.3
 requests==2.31.0
 pillow==10.0.0
 tensorflow==2.13.0
-# Add any other dependencies you have
