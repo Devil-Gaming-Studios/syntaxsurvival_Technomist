@@ -10,8 +10,9 @@ SERVER_URL = "https://syntaxsurvival-technomist-2.onrender.com"
 # ================================
 # 🧠 GLOBAL STORAGE
 # ================================
-trained_model = None
-last_config = None
+trained_model  = None
+last_config    = None
+last_model_id  = None
 
 
 # ================================
@@ -138,7 +139,9 @@ def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
     trained_model = model
     last_config   = config
 
+    last_model_id = model_id   # ✅ ADD THIS
     return "Tabular training completed"
+
 
 
 # ================================
@@ -208,6 +211,7 @@ def train_image(folder_path, epochs, use_server_model=True, model_id="xray"):
     trained_model = model
     last_config   = config
 
+    last_model_id = model_id   # ✅ ADD THIS
     return "Image training completed"
 
 
@@ -267,7 +271,7 @@ def upload_weights():
     try:
         response = requests.post(
             f"{SERVER_URL}/send_weights",
-            json={"weights": weights_list},
+            json={"weights": weights_list, "model_id": last_model_id or "unknown"},
             timeout=120
         )
         try:
