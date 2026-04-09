@@ -15,11 +15,10 @@ from training import train_and_upload, upload_weights, predict_disease, detect_d
 
 # ─────────────────────────────────────────
 #  MODEL ID MAPPING
-#  Maps UI model keys → backend model_id strings
 # ─────────────────────────────────────────
 MODEL_ID_MAP = {
-    "tumor": "xray",    # image model
-    "heart": "heart",   # tabular model
+    "tumor": "xray",
+    "heart": "heart",
 }
 
 # ─────────────────────────────────────────
@@ -77,10 +76,9 @@ class App(tk.Tk):
         self.state("zoomed")
         self.resizable(True, True)
         self.configure(bg=BG)
-        # Shared state across screens
         self.filepath = None
-        self.train_result = None   # return value from train_and_upload()
-        self.upload_result = None  # return value from upload_weights()
+        self.train_result = None
+        self.upload_result = None
         self.show_login()
 
     def clear(self):
@@ -122,7 +120,7 @@ class App(tk.Tk):
         ServerLoadingScreen(self, model, epochs)
 
 # ─────────────────────────────────────────
-#  LOGIN SCREEN  (unchanged)
+#  LOGIN SCREEN
 # ─────────────────────────────────────────
 class LoginScreen(tk.Frame):
     def __init__(self, master):
@@ -172,7 +170,7 @@ class LoginScreen(tk.Frame):
             self.master.show_terms()
 
 # ─────────────────────────────────────────
-#  TERMS SCREEN  (unchanged)
+#  TERMS SCREEN
 # ─────────────────────────────────────────
 class TermsScreen(tk.Frame):
     def __init__(self, master):
@@ -265,7 +263,7 @@ class TermsScreen(tk.Frame):
         self.master.destroy()
 
 # ─────────────────────────────────────────
-#  MAIN SCREEN  (unchanged)
+#  MAIN SCREEN
 # ─────────────────────────────────────────
 class MainScreen(tk.Frame):
     def __init__(self, master):
@@ -313,12 +311,9 @@ class MainScreen(tk.Frame):
 
         self.card_frames = {}
 
-        # Status label created early so it can show "Loading..." during fetch
         self.status = tk.Label(self, text="", font=("Helvetica", 10),
                                bg=BG, fg=GRAY)
 
-        # ✅ Fetch model list from server via training.py
-        # Falls back to defaults if server is unreachable
         self.status.config(text="Loading models from server...", fg=GRAY)
         self.update()
         models = get_models()
@@ -391,13 +386,10 @@ class MainScreen(tk.Frame):
 
         self.card_frames[key] = card
         return card
-    
+
     def do_search(self):
         query = self.search_var.get().strip().lower()
-        self.search_var.trace("w", lambda *args: self.do_search())
-
         if not query:
-            # Show all cards
             for data in self.model_data.values():
                 data["card"].pack_forget()
                 data["card"].pack(side="left", expand=True, fill="x", padx=(0, 12))
@@ -405,13 +397,9 @@ class MainScreen(tk.Frame):
             return
 
         found = False
-
         for key, data in self.model_data.items():
-            title = data["title"]
-            desc  = data["desc"]
-            card  = data["card"]
-
-            if query in title or query in desc:
+            card = data["card"]
+            if query in data["title"] or query in data["desc"]:
                 card.pack_forget()
                 card.pack(side="left", expand=True, fill="x", padx=(0, 12))
                 found = True
@@ -422,6 +410,7 @@ class MainScreen(tk.Frame):
             self.status.config(text=f'Results for "{query}"', fg=GREEN_DARK)
         else:
             self.status.config(text="No matching models found.", fg="red")
+
     def _select(self, key, card, title):
         for k, c in self.card_frames.items():
             c.config(highlightbackground=BORDER, highlightthickness=2, bg=WHITE)
@@ -454,13 +443,11 @@ class MainScreen(tk.Frame):
             messagebox.showinfo("Exists", f'"{name}" is already added.')
             return
 
-        # ✅ Push to server first
         self.status.config(text=f'Adding "{name}" to server...', fg=GRAY)
         self.update()
         success, message = add_model_to_server(name, model_type="tabular")
 
         if not success:
-            # Still add locally even if server is unreachable
             self.status.config(text=f'Server: {message} — added locally only.', fg=GRAY)
         else:
             self.status.config(text=f'"{name}" added to server.', fg=GREEN_MID)
@@ -483,14 +470,8 @@ class MainScreen(tk.Frame):
                   command=lambda k=name, c=card, t=name: self._select(k, c, t)).pack(anchor="w")
 
         self.card_frames[name] = card
-
         self.custom_entry.delete(0, "end")
         self._restore_placeholder(None)
-
-    def do_search(self):
-        query = self.search_var.get().strip()
-        if query:
-            self.status.config(text=f'Searching for: "{query}"...', fg=GRAY)
 
     def _proceed(self):
         sel = self.selected.get()
@@ -501,8 +482,6 @@ class MainScreen(tk.Frame):
 
 # ─────────────────────────────────────────
 #  UPLOAD SCREEN
-#  Collects: filepath, epochs
-#  Passes to: LoadingScreen → train_and_upload()
 # ─────────────────────────────────────────
 class UploadScreen(tk.Frame):
     def __init__(self, master, model):
@@ -533,11 +512,9 @@ class UploadScreen(tk.Frame):
 
         tk.Frame(card, height=1, bg=BORDER).pack(fill="x", pady=(0, 16))
 
-        # ── Dataset upload ──
         tk.Label(card, text="Dataset File",
                  font=("Helvetica", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
 
-        # Hint changes based on model type
         if self.model in ("tumor", "xray"):
             hint = "Accepted formats: image folder (for tumor/image models)"
         else:
@@ -561,7 +538,6 @@ class UploadScreen(tk.Frame):
 
         tk.Frame(card, height=1, bg=BORDER).pack(fill="x", pady=16)
 
-        # ── Epochs ──
         tk.Label(card, text="Training Configuration",
                  font=("Helvetica", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
         tk.Label(card, text="Set the number of training epochs.",
@@ -614,7 +590,6 @@ class UploadScreen(tk.Frame):
         self.unbind_all("<Return>")
 
     def _browse(self):
-        # Tumor model expects an image folder; heart/tabular models expect a CSV
         if self.model in ("tumor", "xray"):
             path = filedialog.askdirectory(title="Select Image Dataset Folder")
         else:
@@ -662,8 +637,6 @@ class UploadScreen(tk.Frame):
 
 # ─────────────────────────────────────────
 #  LOADING SCREEN
-#  Calls train_and_upload() in background thread
-#  Passes result → ResultScreen
 # ─────────────────────────────────────────
 class LoadingScreen(tk.Frame):
     def __init__(self, master, model, filepath, epochs):
@@ -705,7 +678,6 @@ class LoadingScreen(tk.Frame):
                                    font=("Helvetica", 10), bg=BG, fg=GRAY)
         self.step_label.pack(pady=(6, 0))
 
-        # Progress animation runs independently; actual training drives completion
         self._train_result = None
         self._train_done   = False
         self._anim_start   = time.time()
@@ -724,7 +696,6 @@ class LoadingScreen(tk.Frame):
 
     def _animate(self):
         if self._train_done:
-            # Snap to 100 % and move on
             self.bar_fill.place(x=0, y=0, relheight=1, width=400)
             self.pct_label.config(text="100%")
             self.step_label.config(text="Complete!")
@@ -733,7 +704,6 @@ class LoadingScreen(tk.Frame):
             return
 
         elapsed = time.time() - self._anim_start
-        # Cap at 95 % while still training
         pct = min(int((elapsed / 30) * 95), 95)
         self.bar_fill.place(x=0, y=0, relheight=1, width=int(400 * pct / 100))
         self.pct_label.config(text=f"{pct}%")
@@ -741,13 +711,6 @@ class LoadingScreen(tk.Frame):
         self.after(200, self._animate)
 
     def _process(self):
-        """
-        Calls train_and_upload() from train.py with the correct arguments:
-          - path      : file or folder path from UploadScreen
-          - epochs    : integer from the epoch widget
-          - model_id  : resolved via MODEL_ID_MAP; falls back to the raw key
-                        so custom models also work (server will handle unknown IDs)
-        """
         model_id = MODEL_ID_MAP.get(self.model, self.model)
         try:
             result = train_and_upload(
@@ -760,12 +723,163 @@ class LoadingScreen(tk.Frame):
             result = f"Error: {exc}"
 
         self._train_result = result
-        self._train_done   = True  # _animate() will pick this up on next tick
+        self._train_done   = True
 
 # ─────────────────────────────────────────
-#  RESULT SCREEN
-#  Shows train_result string + lets user
-#  download placeholder weights or upload
+#  TRAINING CHART — drawn with tkinter Canvas
+#  Shows accuracy (blue) and loss (coral) over epochs
+# ─────────────────────────────────────────
+class TrainingChart(tk.Frame):
+    """
+    A pure-tkinter line chart that plots accuracy and loss
+    from Keras history.history dict.
+    """
+    W = 700   # canvas width
+    H = 220   # canvas height
+    PAD_L = 54
+    PAD_R = 20
+    PAD_T = 16
+    PAD_B = 40
+
+    def __init__(self, parent, history: dict):
+        super().__init__(parent, bg=WHITE)
+
+        acc_key  = "accuracy" if "accuracy" in history else "acc"
+        loss_key = "loss"
+
+        acc_vals  = history.get(acc_key, [])
+        loss_vals = history.get(loss_key, [])
+        n = max(len(acc_vals), len(loss_vals), 1)
+
+        # ── Legend row ──
+        legend = tk.Frame(self, bg=WHITE)
+        legend.pack(anchor="w", padx=8, pady=(8, 2))
+        self._legend_dot(legend, "#185FA5", "Accuracy (left axis)")
+        tk.Label(legend, text="   ", bg=WHITE).pack(side="left")
+        self._legend_dash(legend, "#D85A30", "Loss (right axis)")
+
+        # ── Canvas ──
+        self.cv = tk.Canvas(self, width=self.W, height=self.H,
+                            bg=WHITE, highlightthickness=0)
+        self.cv.pack(padx=8, pady=(0, 8))
+
+        self._draw(acc_vals, loss_vals, n)
+
+    def _legend_dot(self, parent, color, text):
+        c = tk.Canvas(parent, width=14, height=14,
+                      bg=WHITE, highlightthickness=0)
+        c.pack(side="left")
+        c.create_oval(2, 4, 12, 14, fill=color, outline="")
+        tk.Label(parent, text=text, font=("Helvetica", 9),
+                 bg=WHITE, fg=GRAY).pack(side="left")
+
+    def _legend_dash(self, parent, color, text):
+        c = tk.Canvas(parent, width=20, height=14,
+                      bg=WHITE, highlightthickness=0)
+        c.pack(side="left")
+        c.create_line(0, 9, 20, 9, fill=color, width=2, dash=(5, 3))
+        tk.Label(parent, text=text, font=("Helvetica", 9),
+                 bg=WHITE, fg=GRAY).pack(side="left")
+
+    # ── coordinate helpers ──
+    def _px(self, i, n):
+        """x pixel for epoch i (0-based) out of n."""
+        plot_w = self.W - self.PAD_L - self.PAD_R
+        return self.PAD_L + (i / max(n - 1, 1)) * plot_w
+
+    def _py_acc(self, v):
+        plot_h = self.H - self.PAD_T - self.PAD_B
+        return self.PAD_T + (1.0 - v) * plot_h         # acc 0..1
+
+    def _py_loss(self, v, loss_max):
+        plot_h = self.H - self.PAD_T - self.PAD_B
+        return self.PAD_T + (1.0 - v / max(loss_max, 1e-6)) * plot_h
+
+    def _draw(self, acc_vals, loss_vals, n):
+        cv = self.cv
+        plot_h = self.H - self.PAD_T - self.PAD_B
+        plot_w = self.W - self.PAD_L - self.PAD_R
+
+        # Grid lines & Y-axis labels (accuracy, left)
+        for frac, lbl in [(0.0, "100%"), (0.25, "75%"),
+                          (0.5, "50%"),  (0.75, "25%"), (1.0, "0%")]:
+            y = self.PAD_T + frac * plot_h
+            cv.create_line(self.PAD_L, y, self.W - self.PAD_R, y,
+                           fill="#E5E7EB", dash=(4, 4))
+            cv.create_text(self.PAD_L - 6, y,
+                           text=lbl, anchor="e",
+                           font=("Helvetica", 8), fill="#185FA5")
+
+        # X-axis labels (epochs)
+        tick_every = max(1, n // 8)
+        for i in range(0, n, tick_every):
+            x = self._px(i, n)
+            cv.create_text(x, self.H - self.PAD_B + 8,
+                           text=str(i + 1),
+                           font=("Helvetica", 8), fill=GRAY)
+        # last epoch label
+        cv.create_text(self._px(n - 1, n), self.H - self.PAD_B + 8,
+                       text=str(n), font=("Helvetica", 8), fill=GRAY)
+
+        # X-axis title
+        cv.create_text(self.PAD_L + plot_w / 2, self.H - 6,
+                       text="Epoch", font=("Helvetica", 9), fill=GRAY)
+
+        # Axes border
+        cv.create_rectangle(self.PAD_L, self.PAD_T,
+                            self.W - self.PAD_R, self.H - self.PAD_B,
+                            outline="#D1D5DB", width=1)
+
+        # ── Loss right-axis labels ──
+        loss_max = max(loss_vals) if loss_vals else 1.0
+        loss_max = max(loss_max, 0.01)
+        for frac, val in [(0.0, loss_max), (0.5, loss_max / 2), (1.0, 0.0)]:
+            y = self.PAD_T + frac * plot_h
+            cv.create_text(self.W - self.PAD_R + 6, y,
+                           text=f"{val:.2f}", anchor="w",
+                           font=("Helvetica", 8), fill="#D85A30")
+        cv.create_text(self.W - 10, self.PAD_T + plot_h / 2,
+                       text="Loss", font=("Helvetica", 8),
+                       fill="#D85A30", angle=270)
+
+        # ── Accuracy line (blue, solid) ──
+        if len(acc_vals) >= 2:
+            pts = []
+            for i, v in enumerate(acc_vals):
+                pts += [self._px(i, len(acc_vals)), self._py_acc(min(max(v, 0), 1))]
+            cv.create_line(*pts, fill="#185FA5", width=2, smooth=True)
+            for i, v in enumerate(acc_vals):
+                x = self._px(i, len(acc_vals))
+                y = self._py_acc(min(max(v, 0), 1))
+                cv.create_oval(x - 3, y - 3, x + 3, y + 3,
+                               fill="#185FA5", outline="")
+
+        # ── Loss line (coral, dashed) ──
+        if len(loss_vals) >= 2:
+            pts = []
+            for i, v in enumerate(loss_vals):
+                pts += [self._px(i, len(loss_vals)),
+                        self._py_loss(max(v, 0), loss_max)]
+            cv.create_line(*pts, fill="#D85A30", width=2,
+                           dash=(6, 3), smooth=True)
+
+        # ── Final-value badges ──
+        if acc_vals:
+            fin_acc = acc_vals[-1]
+            cv.create_text(self._px(len(acc_vals) - 1, len(acc_vals)) - 4,
+                           self._py_acc(min(max(fin_acc, 0), 1)) - 10,
+                           text=f"{fin_acc*100:.1f}%",
+                           font=("Helvetica", 8, "bold"), fill="#185FA5")
+        if loss_vals:
+            fin_loss = loss_vals[-1]
+            cv.create_text(self._px(len(loss_vals) - 1, len(loss_vals)) - 4,
+                           self._py_loss(max(fin_loss, 0), loss_max) - 10,
+                           text=f"{fin_loss:.4f}",
+                           font=("Helvetica", 8, "bold"), fill="#D85A30")
+
+
+# ─────────────────────────────────────────
+#  RESULT SCREEN  — now includes training chart
 # ─────────────────────────────────────────
 class ResultScreen(tk.Frame):
     def __init__(self, master, model, filepath, epochs, train_result=None):
@@ -784,7 +898,55 @@ class ResultScreen(tk.Frame):
                  font=("Helvetica", 15, "bold"),
                  bg=GREEN_DARK, fg=WHITE, pady=14).pack()
 
-        top = tk.Frame(self, bg=BG)
+        # ── Scrollable body ──
+        outer = tk.Frame(self, bg=BG)
+        outer.pack(fill="both", expand=True)
+
+        scrollbar = tk.Scrollbar(outer)
+        scrollbar.pack(side="right", fill="y")
+
+        canvas = tk.Canvas(outer, bg=BG, highlightthickness=0,
+                           yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=canvas.yview)
+
+        body = tk.Frame(canvas, bg=BG)
+        body_win = canvas.create_window((0, 0), window=body, anchor="nw")
+
+        def _on_configure(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        body.bind("<Configure>", _on_configure)
+
+        def _on_canvas_resize(e):
+            canvas.itemconfig(body_win, width=e.width)
+        canvas.bind("<Configure>", _on_canvas_resize)
+
+        # ── Mouse wheel scroll (Windows/Linux + macOS) ──
+        def _on_mousewheel(e):
+            # Windows & Linux use e.delta; Linux also fires Button-4/5
+            if e.num == 4:
+                canvas.yview_scroll(-1, "units")
+            elif e.num == 5:
+                canvas.yview_scroll(1, "units")
+            else:
+                canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+        canvas.bind("<MouseWheel>", _on_mousewheel)       # Windows / macOS
+        canvas.bind("<Button-4>",   _on_mousewheel)       # Linux scroll up
+        canvas.bind("<Button-5>",   _on_mousewheel)       # Linux scroll down
+
+        # Also bind on body so scrolling over child widgets works
+        def _bind_children(widget):
+            widget.bind("<MouseWheel>", _on_mousewheel)
+            widget.bind("<Button-4>",   _on_mousewheel)
+            widget.bind("<Button-5>",   _on_mousewheel)
+            for child in widget.winfo_children():
+                _bind_children(child)
+
+        body.bind("<Configure>", lambda e: (_on_configure(e), _bind_children(body)))
+
+        # ── Header row ──
+        top = tk.Frame(body, bg=BG)
         top.pack(fill="x", padx=120, pady=(20, 4))
         tk.Label(top, text="Training Complete",
                  font=("Helvetica", 16, "bold"), bg=BG, fg=TEXT).pack(side="left")
@@ -792,15 +954,15 @@ class ResultScreen(tk.Frame):
                       secondary=True).pack(side="right")
 
         fname = os.path.basename(filepath) if filepath else "—"
-        tk.Label(self,
+        tk.Label(body,
                  text=f"Model: {model.title()}  •  File: {fname}  •  Epochs: {epochs}",
                  font=("Helvetica", 10), bg=BG, fg=GRAY).pack(anchor="w", padx=120)
 
         # ── Training result banner ──
-        result_text = train_result if train_result else "No result returned."
+        result_text  = train_result if train_result else "No result returned."
         result_color = GREEN_DARK if "completed" in str(result_text).lower() else "#B91C1C"
 
-        result_banner = tk.Frame(self, bg=WHITE, padx=20, pady=12,
+        result_banner = tk.Frame(body, bg=WHITE, padx=20, pady=12,
                                  highlightthickness=1,
                                  highlightbackground=BORDER)
         result_banner.pack(fill="x", padx=120, pady=(12, 8))
@@ -809,10 +971,68 @@ class ResultScreen(tk.Frame):
         tk.Label(result_banner, text=result_text,
                  font=("Helvetica", 11), bg=WHITE, fg=result_color).pack(anchor="w", pady=(4, 0))
 
-        tk.Frame(self, height=1, bg=BORDER).pack(fill="x", padx=120, pady=8)
+        tk.Frame(body, height=1, bg=BORDER).pack(fill="x", padx=120, pady=8)
 
-        # ── Weights preview (fetched from the trained model via upload_weights dry-run) ──
-        preview_card = tk.Frame(self, bg=WHITE, padx=20, pady=16,
+        # ── Training chart ──────────────────────────────────────────────────
+        history = _train_module.last_history
+
+        chart_card = tk.Frame(body, bg=WHITE, padx=20, pady=16,
+                              highlightthickness=1,
+                              highlightbackground=BORDER)
+        chart_card.pack(fill="x", padx=120, pady=(0, 12))
+
+        tk.Label(chart_card, text="Training Performance",
+                 font=("Helvetica", 12, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+        tk.Label(chart_card,
+                 text="Accuracy and loss recorded over each training epoch.",
+                 font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(2, 12))
+
+        if history:
+            # ── Metric summary badges ──
+            badge_row = tk.Frame(chart_card, bg=WHITE)
+            badge_row.pack(anchor="w", pady=(0, 10))
+
+            acc_key  = "accuracy" if "accuracy" in history else "acc"
+            acc_vals  = history.get(acc_key, [])
+            loss_vals = history.get("loss", [])
+
+            for lbl, val, color in [
+                ("Final Accuracy",
+                 f"{acc_vals[-1]*100:.1f}%" if acc_vals else "—",
+                 "#185FA5"),
+                ("Final Loss",
+                 f"{loss_vals[-1]:.4f}" if loss_vals else "—",
+                 "#D85A30"),
+                ("Best Accuracy",
+                 f"{max(acc_vals)*100:.1f}%" if acc_vals else "—",
+                 GREEN_DARK),
+                ("Epochs Run",
+                 str(len(acc_vals) or len(loss_vals)),
+                 GRAY),
+            ]:
+                b = tk.Frame(badge_row, bg=GRAY_LITE,
+                             highlightthickness=1,
+                             highlightbackground=BORDER,
+                             padx=12, pady=6)
+                b.pack(side="left", padx=(0, 8))
+                tk.Label(b, text=lbl, font=("Helvetica", 8),
+                         bg=GRAY_LITE, fg=GRAY).pack(anchor="w")
+                tk.Label(b, text=val, font=("Helvetica", 12, "bold"),
+                         bg=GRAY_LITE, fg=color).pack(anchor="w")
+
+            TrainingChart(chart_card, history).pack(fill="x")
+        else:
+            tk.Label(chart_card,
+                     text="No training history available.\n"
+                          "Make sure training.py returns history from model.fit().",
+                     font=("Helvetica", 10), bg=WHITE, fg=GRAY,
+                     justify="left").pack(anchor="w", pady=16)
+
+        tk.Frame(body, height=1, bg=BORDER).pack(fill="x", padx=120, pady=8)
+        # ── end chart section ──────────────────────────────────────────────
+
+        # ── Weights preview ──
+        preview_card = tk.Frame(body, bg=WHITE, padx=20, pady=16,
                                 highlightthickness=1,
                                 highlightbackground=BORDER)
         preview_card.pack(fill="x", padx=120, pady=(0, 16))
@@ -823,7 +1043,6 @@ class ResultScreen(tk.Frame):
                  text="Preview of the trained model weights (structure summary).",
                  font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(2, 12))
 
-        # Build a lightweight JSON preview from the real trained model
         preview_text = self._build_weights_preview()
 
         text_widget = tk.Text(preview_card, font=("Courier", 10),
@@ -834,7 +1053,7 @@ class ResultScreen(tk.Frame):
         text_widget.config(state="disabled")
         text_widget.pack(fill="x")
 
-        btn_row = tk.Frame(self, bg=BG)
+        btn_row = tk.Frame(body, bg=BG)
         btn_row.pack(pady=16)
 
         styled_button(btn_row, "⬇  Download Weights as JSON",
@@ -843,10 +1062,6 @@ class ResultScreen(tk.Frame):
                       self._upload_to_server).pack(side="left")
 
     def _build_weights_preview(self):
-        """
-        Pulls the real weights from the trained model (train.py's global)
-        and returns a JSON-formatted preview string.
-        """
         trained_model = _train_module.trained_model
         last_config   = _train_module.last_config
 
@@ -868,10 +1083,6 @@ class ResultScreen(tk.Frame):
             return json.dumps({"error": str(e)}, indent=2)
 
     def _download(self):
-        """
-        Saves the full trained model weights to a JSON file chosen by the user.
-        Uses the real weights from train.py's global trained_model.
-        """
         trained_model = _train_module.trained_model
         if trained_model is None:
             messagebox.showwarning("No Model", "No trained model available to download.")
@@ -903,7 +1114,7 @@ class ResultScreen(tk.Frame):
         self.master.show_upload_server(self.model, self.epochs)
 
 # ─────────────────────────────────────────
-#  SERVER UPLOAD SCREEN  (unchanged visually)
+#  SERVER UPLOAD SCREEN
 # ─────────────────────────────────────────
 class ServerUploadScreen(tk.Frame):
     def __init__(self, master, model, epochs):
@@ -932,7 +1143,6 @@ class ServerUploadScreen(tk.Frame):
 
         tk.Frame(card, height=1, bg=BORDER).pack(fill="x", pady=(0, 16))
 
-        # Summary — pull real info from the trained model
         summary = tk.Frame(card, bg=GREEN_LITE,
                            highlightthickness=1,
                            highlightbackground=BORDER,
@@ -993,7 +1203,6 @@ class ServerUploadScreen(tk.Frame):
 
 # ─────────────────────────────────────────
 #  SERVER LOADING SCREEN
-#  Calls upload_weights() from train.py
 # ─────────────────────────────────────────
 class ServerLoadingScreen(tk.Frame):
     def __init__(self, master, model, epochs):
@@ -1065,10 +1274,6 @@ class ServerLoadingScreen(tk.Frame):
         self.after(200, self._animate)
 
     def _do_upload(self):
-        """
-        Calls upload_weights() from train.py which POSTs to
-        SERVER_URL/send_weights with the real trained model weights.
-        """
         try:
             result = upload_weights()
         except Exception as exc:
@@ -1083,7 +1288,6 @@ class ServerLoadingScreen(tk.Frame):
 
 # ─────────────────────────────────────────
 #  UPLOAD SUCCESS SCREEN
-#  Shows server response from upload_weights()
 # ─────────────────────────────────────────
 class UploadSuccessScreen(tk.Frame):
     def __init__(self, master, model, epochs, server_response=None):
@@ -1101,7 +1305,6 @@ class UploadSuccessScreen(tk.Frame):
         center = tk.Frame(self, bg=BG)
         center.pack(expand=True)
 
-        # Determine success vs error from server response
         is_error = (
             isinstance(server_response, dict) and "error" in server_response
         ) or (
@@ -1138,7 +1341,6 @@ class UploadSuccessScreen(tk.Frame):
         tk.Label(center, text=detail,
                  font=("Helvetica", 11), bg=BG, fg=GRAY, justify="center").pack(pady=(0, 12))
 
-        # Show raw server response if available
         if server_response and isinstance(server_response, dict):
             resp_frame = tk.Frame(center, bg=GRAY_LITE,
                                   highlightthickness=1,
