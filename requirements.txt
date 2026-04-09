@@ -1,5 +1,7 @@
-fastapi
-uvicorn
-numpy
-python-multipart
-Pillow
+fastapi==0.104.1
+uvicorn==0.24.0
+numpy==1.24.3
+requests==2.31.0
+pillow==10.0.0
+tensorflow==2.13.0
+# Add any other dependencies you have
