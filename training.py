@@ -264,21 +264,11 @@ def upload_weights():
     weights      = trained_model.get_weights()
     weights_list = [w.tolist() for w in weights]
 
-    # ✅ FIX: compress payload to reduce size before sending
-    import json, gzip
-
-    payload     = json.dumps({"weights": weights_list}).encode("utf-8")
-    compressed  = gzip.compress(payload)
-
     try:
         response = requests.post(
             f"{SERVER_URL}/send_weights",
-            data=compressed,                          # send raw compressed bytes
-            headers={
-                "Content-Type":     "application/json",
-                "Content-Encoding": "gzip",           # tell server it's gzip
-            },
-            timeout=120                               # ✅ FIX: was 30, now 120s
+            json={"weights": weights_list},
+            timeout=120
         )
         try:
             return response.json()
