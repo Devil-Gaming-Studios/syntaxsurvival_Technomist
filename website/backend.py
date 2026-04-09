@@ -112,40 +112,25 @@ def add_model(data: Dict):
 # 📤 RECEIVE WEIGHTS
 # ================================
 @app.post("/send_weights")
-async def receive_weights(request: Request):
-
-    body = await request.body()
-    if request.headers.get("Content-Encoding") == "gzip":
-        body = gzip.decompress(body)
-
-    data    = json.loads(body)
+def receive_weights(data: Dict):
     weights = data.get("weights")
-
     if weights is None:
         return {"error": "No weights provided"}
-
     collected_weights.append(weights)
-
-    # ✅ FIX: Average layer-by-layer only when shapes match
-    # Each entry in collected_weights is a list of layers (list of lists)
     if len(collected_weights) >= 2:
         try:
             first = collected_weights[0]
             averaged = []
             for layer_idx in range(len(first)):
-                # Stack the same layer from all clients and average
                 layer_stack = [np.array(cw[layer_idx]) for cw in collected_weights]
                 avg_layer = np.mean(layer_stack, axis=0)
                 averaged.append(avg_layer.tolist())
-
             global_models["heart"] = averaged
             collected_weights.clear()
             return {"status": "weights received and aggregated"}
-
         except Exception as e:
             collected_weights.clear()
             return {"error": f"Aggregation failed: {str(e)}"}
-
     return {"status": "weights received"}
 
 # ================================
