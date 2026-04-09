@@ -12,7 +12,6 @@
   <div class="nav-logo">✚ Medi<span>Care</span> AI</div>
   <div>
     <a href="#">Home</a>
-    <a href="#diagnose">Diagnose</a>
     <a href="#how">How It Works</a>
     <a href="MediCare_App_Tutorial.pdf" download class="tutorial-btn">
       📄 App Tutorial
@@ -30,7 +29,6 @@
   <h1>Clinical AI for<br/><em>Faster Diagnoses</em></h1>
   <p>Enter patient parameters and receive an instant AI-driven diagnosis with a personalised treatment plan — powered by machine learning and Gemini AI.</p>
   <div class="hero-btns">
-    <a href="#diagnose" class="btn btn-white">Start Diagnosis</a>
     <a href="#how" class="btn btn-outline">How It Works</a>
     <a href="MediCare_App_Tutorial.pdf" download class="btn btn-outline">📄 Download Tutorial</a>
   </div>
@@ -42,27 +40,24 @@
   <h2 class="section-title">Three Conditions. One Portal.</h2>
   <p class="section-sub">Select a condition below or use the form to begin your AI-assisted screening</p>
   <div class="cards">
-    <a href="#diagnose" class="card" onclick="setDisease('diabetes')">
+    <div class="card">
       <div class="card-icon">⬡</div>
       <h3>Diabetes</h3>
       <p>Analyse glucose levels, BMI, HbA1c and lifestyle factors to assess diabetes risk.</p>
       <div class="tags"><span class="tag">Glucose</span><span class="tag">HbA1c</span><span class="tag">BMI</span><span class="tag">Hypertension</span></div>
-      <div class="card-cta">Begin Screening →</div>
-    </a>
-    <a href="#diagnose" class="card" onclick="setDisease('heart')">
+    </div>
+    <div class="card">
       <div class="card-icon">♡</div>
       <h3>Heart Disease</h3>
       <p>Evaluate cardiac indicators including ECG results, cholesterol, and exercise tolerance.</p>
       <div class="tags"><span class="tag">ECG</span><span class="tag">Cholesterol</span><span class="tag">Blood Pressure</span></div>
-      <div class="card-cta">Begin Screening →</div>
-    </a>
-    <a href="#diagnose" class="card" onclick="setDisease('covid')">
+    </div>
+    <div class="card">
       <div class="card-icon">◫</div>
-      <h3>COVID-19 X-Ray</h3>
-      <p>Upload a chest X-ray image for instant COVID-19 detection using deep learning.</p>
+      <h3>Tumor X-Ray</h3>
+      <p>Upload a chest X-ray image for instant Tumor detection using deep learning.</p>
       <div class="tags"><span class="tag">Chest X-Ray</span><span class="tag">Image AI</span></div>
-      <div class="card-cta">Begin Screening →</div>
-    </a>
+    </div>
   </div>
 </div>
 
@@ -108,24 +103,7 @@
   </div>
 </div>
 
-<!-- DIAGNOSE -->
-<div class="section" id="diagnose">
-  <div class="section-label">Run a Diagnosis</div>
-  <h2 class="section-title">Select &amp; Diagnose</h2>
-  <p class="section-sub">Choose a condition, enter parameters, and get your result</p>
 
-  <div class="select-wrap">
-    <h2>Select Diagnosis Type</h2>
-    <p>Choose the condition you want to screen for</p>
-    <select id="diseaseSelect" onchange="renderForm()">
-      <option value="">— Select a condition —</option>
-      <option value="diabetes">Diabetes</option>
-      <option value="heart">Heart Disease</option>
-      <option value="covid">COVID-19 (X-Ray)</option>
-    </select>
-  </div>
-
-  <div id="formContainer"></div>
 
   <div id="resultCard" class="hidden">
     <div class="result-header">
