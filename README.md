@@ -6,7 +6,7 @@
 
 ## Overview
 
-Healthcare institutions need to collaborate on training AI diagnostic models, but patient data is highly sensitive and governed by strict regulations. Centralising data from multiple hospitals increases privacy risks and is often infeasible due to institutional data-sharing policies.
+Healthcare institutions need to collaborate on training AI diagnostic models, but patient data is highly sensitive and governed by strict regulations such as **HIPAA** and **GDPR**. Centralising data from multiple hospitals increases privacy risks and is often infeasible due to institutional data-sharing policies.
 
 **PS-18** solves this by implementing a Federated Learning-based system where multiple hospitals can collaboratively train AI models **without sharing raw patient data**. Only model weights or gradients are transmitted to a central aggregation server — raw records (EHRs, medical images, diagnostic reports) **never leave** the originating institution.
 
@@ -151,9 +151,7 @@ Together, these simulate the full federated learning pipeline:
 
 ---
 
-## Team
+## Team Technomist
 
-| Name | Role |
-|---|---|
-| [Ravi Prakash Nag](https://github.com/divyanshagrawal51) 
-| [Divyansh Agrawal](https://github.com/Devil-Gaming-Studios)
+- [Ravi Prakash Nag](https://github.com/divyanshagrawal51) 
+- [Divyansh Agrawal](https://github.com/Devil-Gaming-Studios)
