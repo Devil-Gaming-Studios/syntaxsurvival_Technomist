@@ -11,7 +11,7 @@ import tkinter.font as tkfont
 #  IMPORT APP LOGIC
 # ─────────────────────────────────────────
 import training as _train_module
-from training import train_and_upload, upload_weights, predict_disease, detect_data_type
+from training import train_and_upload, upload_weights, predict_disease, detect_data_type, get_models, add_model_to_server
 
 # ─────────────────────────────────────────
 #  MODEL ID MAPPING
@@ -312,10 +312,17 @@ class MainScreen(tk.Frame):
         cards_frame.pack(padx=200, fill="x")
 
         self.card_frames = {}
-        models = [
-            ("tumor",   "Tumor Detection",      "Analyzes imaging data to identify and classify tumor regions."),
-            ("heart",   "Heart Disease Model",  "Evaluates cardiac indicators to assess heart disease risk."),
-        ]
+
+        # Status label created early so it can show "Loading..." during fetch
+        self.status = tk.Label(self, text="", font=("Helvetica", 10),
+                               bg=BG, fg=GRAY)
+
+        # ✅ Fetch model list from server via training.py
+        # Falls back to defaults if server is unreachable
+        self.status.config(text="Loading models from server...", fg=GRAY)
+        self.update()
+        models = get_models()
+        self.status.config(text="")
 
         for key, title, desc in models:
             self._make_card(cards_frame, key, title, desc)
@@ -346,8 +353,6 @@ class MainScreen(tk.Frame):
         styled_button(self, "Proceed with Selected Model →",
                       self._proceed).pack(pady=28)
 
-        self.status = tk.Label(self, text="", font=("Helvetica", 10),
-                               bg=BG, fg=GRAY)
         self.status.pack()
 
     def _make_card(self, parent, key, title, desc, custom=False):
@@ -412,6 +417,17 @@ class MainScreen(tk.Frame):
             messagebox.showinfo("Exists", f'"{name}" is already added.')
             return
 
+        # ✅ Push to server first
+        self.status.config(text=f'Adding "{name}" to server...', fg=GRAY)
+        self.update()
+        success, message = add_model_to_server(name, model_type="tabular")
+
+        if not success:
+            # Still add locally even if server is unreachable
+            self.status.config(text=f'Server: {message} — added locally only.', fg=GRAY)
+        else:
+            self.status.config(text=f'"{name}" added to server.', fg=GREEN_MID)
+
         new_frame = tk.Frame(self, bg=BG)
         new_frame.pack(padx=200, fill="x", pady=(0, 4))
 
@@ -433,7 +449,6 @@ class MainScreen(tk.Frame):
 
         self.custom_entry.delete(0, "end")
         self._restore_placeholder(None)
-        self.status.config(text=f'Model "{name}" added.', fg=GREEN_MID)
 
     def do_search(self):
         query = self.search_var.get().strip()
