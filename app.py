@@ -119,6 +119,10 @@ class App(tk.Tk):
         self.clear()
         ServerLoadingScreen(self, model, epochs)
 
+    def show_test(self, model, epochs):
+        self.clear()
+        TestScreen(self, model, epochs)
+
 # ─────────────────────────────────────────
 #  LOGIN SCREEN
 # ─────────────────────────────────────────
@@ -726,16 +730,11 @@ class LoadingScreen(tk.Frame):
         self._train_done   = True
 
 # ─────────────────────────────────────────
-#  TRAINING CHART — drawn with tkinter Canvas
-#  Shows accuracy (blue) and loss (coral) over epochs
+#  TRAINING CHART
 # ─────────────────────────────────────────
 class TrainingChart(tk.Frame):
-    """
-    A pure-tkinter line chart that plots accuracy and loss
-    from Keras history.history dict.
-    """
-    W = 700   # canvas width
-    H = 220   # canvas height
+    W = 700
+    H = 220
     PAD_L = 54
     PAD_R = 20
     PAD_T = 16
@@ -751,14 +750,12 @@ class TrainingChart(tk.Frame):
         loss_vals = history.get(loss_key, [])
         n = max(len(acc_vals), len(loss_vals), 1)
 
-        # ── Legend row ──
         legend = tk.Frame(self, bg=WHITE)
         legend.pack(anchor="w", padx=8, pady=(8, 2))
         self._legend_dot(legend, "#185FA5", "Accuracy (left axis)")
         tk.Label(legend, text="   ", bg=WHITE).pack(side="left")
         self._legend_dash(legend, "#D85A30", "Loss (right axis)")
 
-        # ── Canvas ──
         self.cv = tk.Canvas(self, width=self.W, height=self.H,
                             bg=WHITE, highlightthickness=0)
         self.cv.pack(padx=8, pady=(0, 8))
@@ -781,15 +778,13 @@ class TrainingChart(tk.Frame):
         tk.Label(parent, text=text, font=("Helvetica", 9),
                  bg=WHITE, fg=GRAY).pack(side="left")
 
-    # ── coordinate helpers ──
     def _px(self, i, n):
-        """x pixel for epoch i (0-based) out of n."""
         plot_w = self.W - self.PAD_L - self.PAD_R
         return self.PAD_L + (i / max(n - 1, 1)) * plot_w
 
     def _py_acc(self, v):
         plot_h = self.H - self.PAD_T - self.PAD_B
-        return self.PAD_T + (1.0 - v) * plot_h         # acc 0..1
+        return self.PAD_T + (1.0 - v) * plot_h
 
     def _py_loss(self, v, loss_max):
         plot_h = self.H - self.PAD_T - self.PAD_B
@@ -800,7 +795,6 @@ class TrainingChart(tk.Frame):
         plot_h = self.H - self.PAD_T - self.PAD_B
         plot_w = self.W - self.PAD_L - self.PAD_R
 
-        # Grid lines & Y-axis labels (accuracy, left)
         for frac, lbl in [(0.0, "100%"), (0.25, "75%"),
                           (0.5, "50%"),  (0.75, "25%"), (1.0, "0%")]:
             y = self.PAD_T + frac * plot_h
@@ -810,27 +804,22 @@ class TrainingChart(tk.Frame):
                            text=lbl, anchor="e",
                            font=("Helvetica", 8), fill="#185FA5")
 
-        # X-axis labels (epochs)
         tick_every = max(1, n // 8)
         for i in range(0, n, tick_every):
             x = self._px(i, n)
             cv.create_text(x, self.H - self.PAD_B + 8,
                            text=str(i + 1),
                            font=("Helvetica", 8), fill=GRAY)
-        # last epoch label
         cv.create_text(self._px(n - 1, n), self.H - self.PAD_B + 8,
                        text=str(n), font=("Helvetica", 8), fill=GRAY)
 
-        # X-axis title
         cv.create_text(self.PAD_L + plot_w / 2, self.H - 6,
                        text="Epoch", font=("Helvetica", 9), fill=GRAY)
 
-        # Axes border
         cv.create_rectangle(self.PAD_L, self.PAD_T,
                             self.W - self.PAD_R, self.H - self.PAD_B,
                             outline="#D1D5DB", width=1)
 
-        # ── Loss right-axis labels ──
         loss_max = max(loss_vals) if loss_vals else 1.0
         loss_max = max(loss_max, 0.01)
         for frac, val in [(0.0, loss_max), (0.5, loss_max / 2), (1.0, 0.0)]:
@@ -842,7 +831,6 @@ class TrainingChart(tk.Frame):
                        text="Loss", font=("Helvetica", 8),
                        fill="#D85A30", angle=270)
 
-        # ── Accuracy line (blue, solid) ──
         if len(acc_vals) >= 2:
             pts = []
             for i, v in enumerate(acc_vals):
@@ -854,7 +842,6 @@ class TrainingChart(tk.Frame):
                 cv.create_oval(x - 3, y - 3, x + 3, y + 3,
                                fill="#185FA5", outline="")
 
-        # ── Loss line (coral, dashed) ──
         if len(loss_vals) >= 2:
             pts = []
             for i, v in enumerate(loss_vals):
@@ -863,7 +850,6 @@ class TrainingChart(tk.Frame):
             cv.create_line(*pts, fill="#D85A30", width=2,
                            dash=(6, 3), smooth=True)
 
-        # ── Final-value badges ──
         if acc_vals:
             fin_acc = acc_vals[-1]
             cv.create_text(self._px(len(acc_vals) - 1, len(acc_vals)) - 4,
@@ -879,7 +865,7 @@ class TrainingChart(tk.Frame):
 
 
 # ─────────────────────────────────────────
-#  RESULT SCREEN  — now includes training chart
+#  RESULT SCREEN
 # ─────────────────────────────────────────
 class ResultScreen(tk.Frame):
     def __init__(self, master, model, filepath, epochs, train_result=None):
@@ -898,7 +884,6 @@ class ResultScreen(tk.Frame):
                  font=("Helvetica", 15, "bold"),
                  bg=GREEN_DARK, fg=WHITE, pady=14).pack()
 
-        # ── Scrollable body ──
         outer = tk.Frame(self, bg=BG)
         outer.pack(fill="both", expand=True)
 
@@ -921,9 +906,7 @@ class ResultScreen(tk.Frame):
             canvas.itemconfig(body_win, width=e.width)
         canvas.bind("<Configure>", _on_canvas_resize)
 
-        # ── Mouse wheel scroll (Windows/Linux + macOS) ──
         def _on_mousewheel(e):
-            # Windows & Linux use e.delta; Linux also fires Button-4/5
             if e.num == 4:
                 canvas.yview_scroll(-1, "units")
             elif e.num == 5:
@@ -931,11 +914,10 @@ class ResultScreen(tk.Frame):
             else:
                 canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
 
-        canvas.bind("<MouseWheel>", _on_mousewheel)       # Windows / macOS
-        canvas.bind("<Button-4>",   _on_mousewheel)       # Linux scroll up
-        canvas.bind("<Button-5>",   _on_mousewheel)       # Linux scroll down
+        canvas.bind("<MouseWheel>", _on_mousewheel)
+        canvas.bind("<Button-4>",   _on_mousewheel)
+        canvas.bind("<Button-5>",   _on_mousewheel)
 
-        # Also bind on body so scrolling over child widgets works
         def _bind_children(widget):
             widget.bind("<MouseWheel>", _on_mousewheel)
             widget.bind("<Button-4>",   _on_mousewheel)
@@ -945,7 +927,6 @@ class ResultScreen(tk.Frame):
 
         body.bind("<Configure>", lambda e: (_on_configure(e), _bind_children(body)))
 
-        # ── Header row ──
         top = tk.Frame(body, bg=BG)
         top.pack(fill="x", padx=120, pady=(20, 4))
         tk.Label(top, text="Training Complete",
@@ -958,7 +939,6 @@ class ResultScreen(tk.Frame):
                  text=f"Model: {model.title()}  •  File: {fname}  •  Epochs: {epochs}",
                  font=("Helvetica", 10), bg=BG, fg=GRAY).pack(anchor="w", padx=120)
 
-        # ── Training result banner ──
         result_text  = train_result if train_result else "No result returned."
         result_color = GREEN_DARK if "completed" in str(result_text).lower() else "#B91C1C"
 
@@ -973,7 +953,6 @@ class ResultScreen(tk.Frame):
 
         tk.Frame(body, height=1, bg=BORDER).pack(fill="x", padx=120, pady=8)
 
-        # ── Training chart ──────────────────────────────────────────────────
         history = _train_module.last_history
 
         chart_card = tk.Frame(body, bg=WHITE, padx=20, pady=16,
@@ -988,7 +967,6 @@ class ResultScreen(tk.Frame):
                  font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(2, 12))
 
         if history:
-            # ── Metric summary badges ──
             badge_row = tk.Frame(chart_card, bg=WHITE)
             badge_row.pack(anchor="w", pady=(0, 10))
 
@@ -1029,9 +1007,7 @@ class ResultScreen(tk.Frame):
                      justify="left").pack(anchor="w", pady=16)
 
         tk.Frame(body, height=1, bg=BORDER).pack(fill="x", padx=120, pady=8)
-        # ── end chart section ──────────────────────────────────────────────
 
-        # ── Weights preview ──
         preview_card = tk.Frame(body, bg=WHITE, padx=20, pady=16,
                                 highlightthickness=1,
                                 highlightbackground=BORDER)
@@ -1058,6 +1034,8 @@ class ResultScreen(tk.Frame):
 
         styled_button(btn_row, "⬇  Download Weights as JSON",
                       self._download, secondary=True).pack(side="left", padx=(0, 12))
+        styled_button(btn_row, "🧪  Test on New Data",
+                      self._test, secondary=True).pack(side="left", padx=(0, 12))
         styled_button(btn_row, "☁  Upload to Server →",
                       self._upload_to_server).pack(side="left")
 
@@ -1110,8 +1088,461 @@ class ResultScreen(tk.Frame):
                 json.dump(weights_data, f, indent=2)
             messagebox.showinfo("Saved", f"Weights saved to:\n{save_path}")
 
+    def _test(self):
+        self.master.show_test(self.model, self.epochs)
+
     def _upload_to_server(self):
         self.master.show_upload_server(self.model, self.epochs)
+
+# ─────────────────────────────────────────
+#  TEST SCREEN  — FIXED scroll + chart
+# ─────────────────────────────────────────
+class TestScreen(tk.Frame):
+    def __init__(self, master, model, epochs):
+        super().__init__(master, bg=BG)
+        self.master   = master
+        self.model    = model
+        self.epochs   = epochs
+        self.filepath = None
+        self._results = []
+        self.pack(fill="both", expand=True)
+
+        tk.Frame(self, height=5, bg=GREEN_DARK).pack(fill="x")
+        header = tk.Frame(self, bg=GREEN_DARK)
+        header.pack(fill="x")
+        tk.Label(header, text="✚  MediCare Portal",
+                 font=("Helvetica", 15, "bold"),
+                 bg=GREEN_DARK, fg=WHITE, pady=14).pack()
+
+        # ── Scrollable body ──────────────────────────────────────────────
+        outer = tk.Frame(self, bg=BG)
+        outer.pack(fill="both", expand=True)
+
+        sb = tk.Scrollbar(outer)
+        sb.pack(side="right", fill="y")
+
+        # Store canvas as instance variable so _bind_scroll can reach it
+        self._scroll_cv = tk.Canvas(outer, bg=BG, highlightthickness=0,
+                                    yscrollcommand=sb.set)
+        self._scroll_cv.pack(side="left", fill="both", expand=True)
+        sb.config(command=self._scroll_cv.yview)
+
+        body = tk.Frame(self._scroll_cv, bg=BG)
+        body_win = self._scroll_cv.create_window((0, 0), window=body, anchor="nw")
+
+        # FIX: define callbacks as proper methods at the right scope level
+        def _on_cfg(e):
+            self._scroll_cv.configure(scrollregion=self._scroll_cv.bbox("all"))
+
+        def _on_rsz(e):
+            self._scroll_cv.itemconfig(body_win, width=e.width)
+
+        # FIX: _mw defined cleanly at class level via instance method
+        body.bind("<Configure>", _on_cfg)
+        self._scroll_cv.bind("<Configure>", _on_rsz)
+        self._scroll_cv.bind("<MouseWheel>", self._mw)
+        self._scroll_cv.bind("<Button-4>",   self._mw)
+        self._scroll_cv.bind("<Button-5>",   self._mw)
+
+        # ── Title ──
+        top = tk.Frame(body, bg=BG)
+        top.pack(fill="x", padx=120, pady=(20, 4))
+        tk.Label(top, text="Test on New Data",
+                 font=("Helvetica", 16, "bold"), bg=BG, fg=TEXT).pack(side="left")
+        styled_button(top, "⟵ Back to Results",
+                      lambda: master.show_result(model, master.filepath, epochs),
+                      secondary=True).pack(side="right")
+
+        tk.Label(body,
+                 text=f"Model: {model.title()}  •  Trained for {epochs} epoch(s)",
+                 font=("Helvetica", 10), bg=BG, fg=GRAY).pack(anchor="w", padx=120)
+
+        # ── File upload card ──
+        card = tk.Frame(body, bg=WHITE, padx=30, pady=24,
+                        highlightthickness=1, highlightbackground=BORDER)
+        card.pack(fill="x", padx=120, pady=(16, 8))
+
+        tk.Label(card, text="Select Test Dataset",
+                 font=("Helvetica", 12, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+
+        is_image = model in ("tumor", "xray")
+        hint = ("Select the image folder to test on." if is_image
+                else "Select a CSV file. The last column is treated as the label (ground truth).")
+        tk.Label(card, text=hint,
+                 font=("Helvetica", 9), bg=WHITE, fg=GRAY,
+                 wraplength=600, justify="left").pack(anchor="w", pady=(2, 12))
+
+        drop_zone = tk.Frame(card, bg=GREEN_LITE,
+                             highlightthickness=1, highlightbackground=BORDER,
+                             pady=18, padx=20)
+        drop_zone.pack(fill="x", pady=(0, 16))
+
+        tk.Label(drop_zone, text="📂", font=("Helvetica", 22), bg=GREEN_LITE).pack()
+        self.file_label = tk.Label(drop_zone, text="No file selected",
+                                   font=("Helvetica", 10), bg=GREEN_LITE, fg=GRAY)
+        self.file_label.pack(pady=(4, 8))
+        styled_button(drop_zone, "Browse", self._browse).pack()
+
+        run_row = tk.Frame(card, bg=WHITE)
+        run_row.pack(fill="x", pady=(8, 0))
+        self.run_btn = styled_button(run_row, "▶  Run Predictions", self._run)
+        self.run_btn.pack(side="right")
+
+        tk.Frame(body, height=1, bg=BORDER).pack(fill="x", padx=120, pady=8)
+
+        # ── Results area ──
+        self.results_card = tk.Frame(body, bg=WHITE, padx=30, pady=24,
+                                     highlightthickness=1, highlightbackground=BORDER)
+        self.results_card.pack(fill="x", padx=120, pady=(0, 24))
+
+        tk.Label(self.results_card, text="Prediction Results",
+                 font=("Helvetica", 12, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+        tk.Label(self.results_card,
+                 text="Results will appear here after running predictions.",
+                 font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(2, 0))
+
+        self.results_body = tk.Frame(self.results_card, bg=WHITE)
+        self.results_body.pack(fill="x", pady=(12, 0))
+
+    # ── FIX: _mw is now a proper instance method, always available ──
+    def _mw(self, e):
+        if e.num == 4:
+            self._scroll_cv.yview_scroll(-1, "units")
+        elif e.num == 5:
+            self._scroll_cv.yview_scroll(1, "units")
+        else:
+            self._scroll_cv.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+    def _bind_scroll(self, widget):
+        """Recursively bind mousewheel scroll to all child widgets."""
+        widget.bind("<MouseWheel>", self._mw)
+        widget.bind("<Button-4>",   self._mw)
+        widget.bind("<Button-5>",   self._mw)
+        for child in widget.winfo_children():
+            self._bind_scroll(child)
+
+    def _browse(self):
+        is_image = self.model in ("tumor", "xray")
+        if is_image:
+            path = filedialog.askdirectory(title="Select Test Image Folder")
+        else:
+            path = filedialog.askopenfilename(
+                title="Select Test CSV",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
+        if path:
+            self.filepath = path
+            self.file_label.config(text=f"✔  {os.path.basename(path)}", fg=GREEN_DARK)
+
+    def _run(self):
+        if _train_module.trained_model is None:
+            messagebox.showwarning("No Model",
+                                   "No trained model found.\nPlease train a model first.")
+            return
+        if not self.filepath:
+            messagebox.showwarning("No File", "Please select a test dataset first.")
+            return
+
+        self.run_btn.config(state="disabled", text="Running…")
+        self.update()
+
+        for w in self.results_body.winfo_children():
+            w.destroy()
+
+        threading.Thread(target=self._predict_thread, daemon=True).start()
+
+    def _predict_thread(self):
+        try:
+            results = _train_module.predict_from_file(self.filepath)
+        except Exception as exc:
+            results = [("Error", str(exc), "")]
+        self.after(0, lambda: self._show_results(results))
+
+    def _show_results(self, results):
+        self.run_btn.config(state="normal", text="▶  Run Predictions")
+
+        for w in self.results_body.winfo_children():
+            w.destroy()
+
+        if not results:
+            tk.Label(self.results_body, text="No predictions returned.",
+                     font=("Helvetica", 10), bg=WHITE, fg=GRAY).pack(anchor="w")
+            return
+
+        # ── Summary badges ──
+        total = len(results)
+        pos   = sum(1 for _, pred, _ in results if "detected" in pred.lower()
+                    or "yes" in pred.lower() or "positive" in pred.lower()
+                    or (pred.strip().lstrip("-").replace(".", "", 1).isdigit()
+                        and float(pred.strip()) > 0.5))
+        neg   = total - pos
+
+        badge_row = tk.Frame(self.results_body, bg=WHITE)
+        badge_row.pack(anchor="w", pady=(0, 12))
+        for lbl, val, color in [
+            ("Total Samples",        str(total), GRAY),
+            ("Positive / Detected",  str(pos),   "#B91C1C"),
+            ("Negative / Clear",     str(neg),   GREEN_DARK),
+        ]:
+            b = tk.Frame(badge_row, bg=GRAY_LITE,
+                         highlightthickness=1, highlightbackground=BORDER,
+                         padx=12, pady=6)
+            b.pack(side="left", padx=(0, 8))
+            tk.Label(b, text=lbl,  font=("Helvetica", 8),
+                     bg=GRAY_LITE, fg=GRAY).pack(anchor="w")
+            tk.Label(b, text=val, font=("Helvetica", 12, "bold"),
+                     bg=GRAY_LITE, fg=color).pack(anchor="w")
+
+        tk.Frame(self.results_body, height=1, bg=BORDER).pack(fill="x", pady=(0, 8))
+
+        # ── Column headers ──
+        hdr = tk.Frame(self.results_body, bg=GRAY_LITE)
+        hdr.pack(fill="x", pady=(0, 2))
+        for txt, w in [("#", 4), ("Sample / Row", 24), ("Prediction", 22), ("Confidence", 12)]:
+            tk.Label(hdr, text=txt, font=("Helvetica", 9, "bold"),
+                     bg=GRAY_LITE, fg=TEXT, width=w, anchor="w",
+                     padx=6, pady=4).pack(side="left")
+
+        # ── Table ──
+        table_frame = tk.Frame(self.results_body, bg=WHITE,
+                               highlightthickness=1, highlightbackground=BORDER)
+        table_frame.pack(fill="x")
+
+        max_rows = min(len(results), 200)
+        for idx, (sample_lbl, pred, conf) in enumerate(results[:max_rows]):
+            row_bg = WHITE if idx % 2 == 0 else GRAY_LITE
+            row = tk.Frame(table_frame, bg=row_bg)
+            row.pack(fill="x")
+
+            is_pos = ("detected" in pred.lower() or "yes" in pred.lower()
+                      or "positive" in pred.lower()
+                      or (pred.strip().lstrip("-").replace(".", "", 1).isdigit()
+                          and float(pred.strip()) > 0.5))
+            pred_color = "#B91C1C" if is_pos else GREEN_DARK
+
+            for txt, w, color in [
+                (str(idx + 1),    4,  GRAY),
+                (str(sample_lbl), 24, TEXT),
+                (pred,            22, pred_color),
+                (conf,            12, GRAY),
+            ]:
+                tk.Label(row, text=txt, font=("Helvetica", 9),
+                         bg=row_bg, fg=color, width=w, anchor="w",
+                         padx=6, pady=3).pack(side="left")
+
+        if len(results) > 200:
+            tk.Label(self.results_body,
+                     text=f"Showing first 200 of {len(results)} rows.",
+                     font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(6, 0))
+
+        # ── Export button ──
+        styled_button(self.results_body, "⬇  Export Results as CSV",
+                      lambda: self._export(results), secondary=True).pack(anchor="w", pady=(12, 0))
+
+        # FIX: draw chart BEFORE rebinding scroll so chart widgets also get bound
+        self._draw_accuracy_chart(results)
+
+        # FIX: rebind scroll after all widgets are created
+        self.after(50, lambda: self._bind_scroll(self.results_body))
+
+    def _draw_accuracy_chart(self, results):
+        import re
+
+        chart_frame = tk.Frame(self.results_body, bg=WHITE,
+                               highlightthickness=1, highlightbackground=BORDER,
+                               padx=20, pady=16)
+        chart_frame.pack(fill="x", pady=(16, 0))
+
+        tk.Label(chart_frame, text="Prediction Analysis",
+                 font=("Helvetica", 12, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+        tk.Label(chart_frame,
+                 text="Accuracy and confidence distribution across all predictions.",
+                 font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(2, 12))
+
+        # ── Accuracy from GT labels ──
+        correct = 0
+        incorrect = 0
+        has_gt = False
+
+        for sample_lbl, pred, conf in results:
+            match = re.search(r"GT:\s*(\S+)", sample_lbl)
+            if match:
+                has_gt = True
+                gt     = match.group(1).strip().lower()
+                pred_l = pred.strip().lower()
+
+                pred_positive = any(k in pred_l for k in ("detected", "yes", "positive", "1"))
+                pred_negative = any(k in pred_l for k in ("no disease", "not detected", "no", "negative", "0", "clear"))
+
+                gt_positive = gt in ("1", "yes", "positive", "detected")
+                gt_negative = gt in ("0", "no", "negative", "clear", "no disease")
+
+                if pred_positive and gt_positive:
+                    correct += 1
+                elif pred_negative and gt_negative:
+                    correct += 1
+                else:
+                    incorrect += 1
+
+        total = len(results)
+
+        badge_row = tk.Frame(chart_frame, bg=WHITE)
+        badge_row.pack(anchor="w", pady=(0, 14))
+
+        if has_gt and (correct + incorrect) > 0:
+            acc_pct = correct / (correct + incorrect) * 100
+            for lbl, val, color in [
+                ("Accuracy",  f"{acc_pct:.1f}%", GREEN_DARK),
+                ("Correct",   str(correct),       GREEN_DARK),
+                ("Incorrect", str(incorrect),     "#B91C1C"),
+                ("Total",     str(total),         GRAY),
+            ]:
+                b = tk.Frame(badge_row, bg=GRAY_LITE,
+                             highlightthickness=1, highlightbackground=BORDER,
+                             padx=12, pady=6)
+                b.pack(side="left", padx=(0, 8))
+                tk.Label(b, text=lbl, font=("Helvetica", 8),
+                         bg=GRAY_LITE, fg=GRAY).pack(anchor="w")
+                tk.Label(b, text=val, font=("Helvetica", 12, "bold"),
+                         bg=GRAY_LITE, fg=color).pack(anchor="w")
+        else:
+            tk.Label(badge_row,
+                     text="Ground-truth labels not detected — showing confidence distribution only.",
+                     font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w")
+
+        # ── Confidence distribution ──
+        conf_bins    = [0] * 10
+        parsed_confs = []
+        for _, _, conf_str in results:
+            try:
+                val = float(conf_str.replace("%", "").strip())
+                parsed_confs.append(val)
+                bucket = min(int(val // 10), 9)
+                conf_bins[bucket] += 1
+            except (ValueError, AttributeError):
+                pass
+
+        if not parsed_confs:
+            tk.Label(chart_frame, text="No confidence data available.",
+                     font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w")
+            return
+
+        avg_conf = sum(parsed_confs) / len(parsed_confs)
+
+        b = tk.Frame(badge_row, bg=GRAY_LITE,
+                     highlightthickness=1, highlightbackground=BORDER,
+                     padx=12, pady=6)
+        b.pack(side="left", padx=(0, 8))
+        tk.Label(b, text="Avg Confidence", font=("Helvetica", 8),
+                 bg=GRAY_LITE, fg=GRAY).pack(anchor="w")
+        tk.Label(b, text=f"{avg_conf:.1f}%", font=("Helvetica", 12, "bold"),
+                 bg=GRAY_LITE, fg="#185FA5").pack(anchor="w")
+
+        # ── Confidence bar chart ──
+        W, H = 680, 180
+        PAD_L, PAD_R, PAD_T, PAD_B = 44, 16, 12, 36
+
+        tk.Label(chart_frame, text="Confidence distribution",
+                 font=("Helvetica", 9, "bold"), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(8, 4))
+
+        cv = tk.Canvas(chart_frame, width=W, height=H,
+                       bg=WHITE, highlightthickness=0)
+        cv.pack(anchor="w")
+
+        plot_w = W - PAD_L - PAD_R
+        plot_h = H - PAD_T - PAD_B
+        max_bin = max(conf_bins) if max(conf_bins) > 0 else 1
+        bar_w   = plot_w / 10
+
+        bin_labels = ["0-10", "10-20", "20-30", "30-40", "40-50",
+                      "50-60", "60-70", "70-80", "80-90", "90-100"]
+
+        for i, count in enumerate(conf_bins):
+            x0 = PAD_L + i * bar_w + 3
+            x1 = PAD_L + (i + 1) * bar_w - 3
+            bar_h = (count / max_bin) * plot_h
+            y0 = PAD_T + plot_h - bar_h
+            y1 = PAD_T + plot_h
+
+            color = "#185FA5" if i >= 5 else "#D85A30"
+            cv.create_rectangle(x0, y0, x1, y1, fill=color, outline="")
+
+            if count > 0:
+                cv.create_text((x0 + x1) / 2, y0 - 4,
+                               text=str(count), font=("Helvetica", 8), fill=TEXT)
+
+            if i % 2 == 0:
+                cv.create_text(PAD_L + (i + 0.5) * bar_w, H - PAD_B + 12,
+                               text=bin_labels[i] + "%",
+                               font=("Helvetica", 7), fill=GRAY)
+
+        for frac in [0.25, 0.5, 0.75, 1.0]:
+            y = PAD_T + plot_h * (1 - frac)
+            cv.create_line(PAD_L, y, W - PAD_R, y, fill="#E5E7EB", dash=(3, 3))
+            cv.create_text(PAD_L - 4, y,
+                           text=str(int(max_bin * frac)),
+                           font=("Helvetica", 7), fill=GRAY, anchor="e")
+
+        cv.create_rectangle(PAD_L, PAD_T, W - PAD_R, PAD_T + plot_h,
+                            outline="#D1D5DB", width=1)
+
+        legend_x = PAD_L
+        for lbl, color in [("High confidence (≥50%)", "#185FA5"),
+                            ("Low confidence (<50%)",  "#D85A30")]:
+            cv.create_rectangle(legend_x, H - 8,
+                                legend_x + 10, H,
+                                fill=color, outline="")
+            cv.create_text(legend_x + 14, H - 4,
+                           text=lbl, font=("Helvetica", 7),
+                           fill=GRAY, anchor="w")
+            legend_x += 160
+
+        # ── Accuracy bar (GT only) ──
+        if has_gt and (correct + incorrect) > 0:
+            tk.Label(chart_frame, text="Correct vs incorrect predictions",
+                     font=("Helvetica", 9, "bold"), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(14, 4))
+
+            bar_canvas = tk.Canvas(chart_frame, width=680, height=36,
+                                   bg=WHITE, highlightthickness=0)
+            bar_canvas.pack(anchor="w")
+
+            total_gt     = correct + incorrect
+            correct_w    = int(640 * correct / total_gt)
+            incorrect_w  = 640 - correct_w
+
+            bar_canvas.create_rectangle(20, 8, 20 + correct_w, 28,
+                                        fill=GREEN_DARK, outline="")
+            bar_canvas.create_rectangle(20 + correct_w, 8,
+                                        20 + correct_w + incorrect_w, 28,
+                                        fill="#B91C1C", outline="")
+            bar_canvas.create_text(20 + correct_w // 2, 18,
+                                   text=f"Correct {correct} ({acc_pct:.0f}%)",
+                                   font=("Helvetica", 8, "bold"), fill=WHITE)
+            if incorrect_w > 60:
+                bar_canvas.create_text(20 + correct_w + incorrect_w // 2, 18,
+                                       text=f"Wrong {incorrect}",
+                                       font=("Helvetica", 8, "bold"), fill=WHITE)
+
+    def _export(self, results):
+        import csv
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv")],
+            initialfile=f"{self.model}_test_results.csv",
+            title="Save Test Results"
+        )
+        if not save_path:
+            return
+        try:
+            with open(save_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["#", "Sample", "Prediction", "Confidence"])
+                for i, (lbl, pred, conf) in enumerate(results, 1):
+                    writer.writerow([i, lbl, pred, conf])
+            messagebox.showinfo("Saved", f"Results saved to:\n{save_path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not save:\n{e}")
+
 
 # ─────────────────────────────────────────
 #  SERVER UPLOAD SCREEN
@@ -1313,11 +1744,11 @@ class UploadSuccessScreen(tk.Frame):
             )
         ) or server_response is None
 
-        icon_color = "#FEE2E2" if is_error else GREEN_LITE
+        icon_color  = "#FEE2E2" if is_error else GREEN_LITE
         icon_border = "#F87171" if is_error else GREEN_MID
-        icon_text  = "✗" if is_error else "✔"
-        icon_fg    = "#B91C1C" if is_error else GREEN_DARK
-        title_text = "Upload Failed" if is_error else "Upload Successful!"
+        icon_text   = "✗" if is_error else "✔"
+        icon_fg     = "#B91C1C" if is_error else GREEN_DARK
+        title_text  = "Upload Failed" if is_error else "Upload Successful!"
         title_color = "#B91C1C" if is_error else GREEN_DARK
 
         icon_frame = tk.Frame(center, bg=icon_color,
@@ -1334,7 +1765,7 @@ class UploadSuccessScreen(tk.Frame):
 
         if is_error:
             err_msg = server_response.get("error", str(server_response)) if isinstance(server_response, dict) else str(server_response)
-            detail = err_msg
+            detail  = err_msg
         else:
             detail = (f"Model weights for {model.title()} ({epochs} epochs)\n"
                       f"have been successfully uploaded to the server.")
