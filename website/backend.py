@@ -261,14 +261,14 @@ async def predict(model_id: str, request: Request):
             AI Prediction: {result}.
             Provide a brief personalised treatment and lifestyle plan in 4-5 bullet points.
             """
+# REPLACE the entire stream block at the bottom of predict()
 
         def stream():
-            # First send prediction as a JSON line
             yield json.dumps({"prediction": result}) + "\n"
-            # Then stream treatment word by word
             for chunk in ask_gemini_stream(prompt):
                 yield json.dumps({"treatment_chunk": chunk}) + "\n"
 
-            return StreamingResponse(stream(), media_type="text/event-stream")
+        return StreamingResponse(stream(), media_type="text/event-stream")   # ← move this OUT of stream()
+
     except Exception as e:
         return {"prediction": "Error", "treatment": str(e)}
