@@ -15,6 +15,67 @@ last_config = None
 
 
 # ================================
+# 📋 FETCH MODEL LIST FROM SERVER
+# ================================
+def get_models():
+    """
+    Fetches the available model list from the server.
+    Returns a list of tuples: (id, name, description)
+    Falls back to a default list if server is unreachable.
+    """
+    try:
+        response = requests.get(f"{SERVER_URL}/models", timeout=10)
+        data = response.json()
+        models = []
+        for m in data.get("models", []):
+            model_id   = m.get("id", "unknown")
+            model_name = m.get("name", model_id.title())
+            model_type = m.get("type", "tabular")
+            desc = m.get("description",
+                f"{'Analyzes imaging data.' if model_type == 'image' else 'Analyzes tabular data.'}"
+            )
+            models.append((model_id, model_name, desc))
+        return models if models else _default_models()
+    except Exception:
+        return _default_models()
+
+def add_model_to_server(name, model_type="tabular"):
+    """
+    Sends a new custom model to the server.
+    model_type: "tabular" or "image"
+    Returns (success: bool, message: str)
+    """
+    model_id = name.strip().lower().replace(" ", "_")
+    try:
+        response = requests.post(
+            f"{SERVER_URL}/add_model",
+            json={
+                "id":          model_id,
+                "name":        name.strip(),
+                "type":        model_type,
+                "description": f"Custom model: {name.strip()}.",
+            },
+            timeout=10
+        )
+        data = response.json()
+        if "error" in data:
+            return False, data["error"]
+        return True, data.get("status", "Model added")
+    except requests.exceptions.ConnectionError:
+        return False, "Could not connect to server."
+    except requests.exceptions.Timeout:
+        return False, "Server timed out."
+    except Exception as e:
+        return False, str(e)
+
+def _default_models():
+    """Fallback if server is unreachable."""
+    return [
+        ("tumor", "Tumor Detection",     "Analyzes imaging data to identify and classify tumor regions."),
+        ("heart", "Heart Disease Model", "Evaluates cardiac indicators to assess heart disease risk."),
+    ]
+
+# ================================
 # 📊 TABULAR TRAINING
 # ================================
 def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
