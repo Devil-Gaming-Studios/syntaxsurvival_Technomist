@@ -1271,7 +1271,7 @@ class TestScreen(tk.Frame):
 
         # ── Summary badges ──
         total = len(results)
-        pos   = sum(1 for _, pred, _ in results if "detected" in pred.lower()
+        pos   = sum(1 for _, pred, _ , _ in results if "detected" in pred.lower()
                     or "yes" in pred.lower() or "positive" in pred.lower()
                     or (pred.strip().lstrip("-").replace(".", "", 1).isdigit()
                         and float(pred.strip()) > 0.5))
@@ -1309,7 +1309,7 @@ class TestScreen(tk.Frame):
         table_frame.pack(fill="x")
 
         max_rows = min(len(results), 200)
-        for idx, (sample_lbl, pred, conf) in enumerate(results[:max_rows]):
+        for idx, (sample_lbl, pred, conf,corr_value) in enumerate(results[:max_rows]):
             row_bg = WHITE if idx % 2 == 0 else GRAY_LITE
             row = tk.Frame(table_frame, bg=row_bg)
             row.pack(fill="x")
@@ -1364,7 +1364,7 @@ class TestScreen(tk.Frame):
         incorrect = 0
         has_gt = False
 
-        for sample_lbl, pred, conf in results:
+        for sample_lbl, pred, conf,corr_data in results:
             match = re.search(r"GT:\s*(\S+)", sample_lbl)
             if match:
                 has_gt = True
@@ -1374,23 +1374,19 @@ class TestScreen(tk.Frame):
                 pred_positive = any(k in pred_l for k in ("detected", "yes", "positive", "1"))
                 pred_negative = any(k in pred_l for k in ("no disease", "not detected", "no", "negative", "0", "clear"))
 
-                gt_positive = gt in ("1", "yes", "positive", "detected")
-                gt_negative = gt in ("0", "no", "negative", "clear", "no disease")
+                # AFTER
+                gt_positive = gt in ("1", "yes", "positive", "detected") or (gt.replace('.','',1).isdigit() and float(gt) > 0.5)
+                gt_negative = not gt_positive
 
-                if pred_positive and gt_positive:
-                    correct += 1
-                elif pred_negative and gt_negative:
-                    correct += 1
-                else:
-                    incorrect += 1
+                correct = corr_data
 
         total = len(results)
 
         badge_row = tk.Frame(chart_frame, bg=WHITE)
         badge_row.pack(anchor="w", pady=(0, 14))
-
+        incorrect = total - correct
         if has_gt and (correct + incorrect) > 0:
-            acc_pct = correct / (correct + incorrect) * 100
+            acc_pct = correct / (total) * 100
             for lbl, val, color in [
                 ("Accuracy",  f"{acc_pct:.1f}%", GREEN_DARK),
                 ("Correct",   str(correct),       GREEN_DARK),
@@ -1464,7 +1460,7 @@ class TestScreen(tk.Frame):
             y0 = PAD_T + plot_h - bar_h
             y1 = PAD_T + plot_h
 
-            color = "#185FA5" if i >= 5 else "#D85A30"
+            color = "#1762AD" if i >= 5 else "#D85A30"
             cv.create_rectangle(x0, y0, x1, y1, fill=color, outline="")
 
             if count > 0:
