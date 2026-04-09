@@ -10,7 +10,8 @@ import tkinter.font as tkfont
 # ─────────────────────────────────────────
 #  IMPORT APP LOGIC
 # ─────────────────────────────────────────
-from train import train_and_upload, upload_weights, predict_disease, detect_data_type
+import training as _train_module
+from training import train_and_upload, upload_weights, predict_disease, detect_data_type
 
 # ─────────────────────────────────────────
 #  MODEL ID MAPPING
@@ -792,22 +793,22 @@ class ResultScreen(tk.Frame):
         """
         Pulls the real weights from the trained model (train.py's global)
         and returns a JSON-formatted preview string.
-        Falls back to a helpful message if no model is trained yet.
         """
-        try:
-            from train import trained_model, last_config
-            if trained_model is None:
-                return json.dumps({"status": "no model trained yet"}, indent=2)
+        trained_model = _train_module.trained_model
+        last_config   = _train_module.last_config
 
+        if trained_model is None:
+            return json.dumps({"status": "no model trained yet"}, indent=2)
+
+        try:
             weights = trained_model.get_weights()
             preview = {
-                "model":   self.model,
-                "epochs":  self.epochs,
-                "config":  last_config,
-                "layers":  len(weights),
-                "shapes":  [list(w.shape) for w in weights],
-                # Show first layer's first few values as a sample
-                "sample_layer_0": weights[0].flatten()[:8].tolist() if len(weights) > 0 else [],
+                "model":          self.model,
+                "epochs":         self.epochs,
+                "config":         last_config,
+                "layers":         len(weights),
+                "shapes":         [list(w.shape) for w in weights],
+                "sample_layer_0": weights[0].flatten()[:8].tolist() if weights else [],
             }
             return json.dumps(preview, indent=2)
         except Exception as e:
@@ -818,12 +819,12 @@ class ResultScreen(tk.Frame):
         Saves the full trained model weights to a JSON file chosen by the user.
         Uses the real weights from train.py's global trained_model.
         """
-        try:
-            from train import trained_model
-            if trained_model is None:
-                messagebox.showwarning("No Model", "No trained model available to download.")
-                return
+        trained_model = _train_module.trained_model
+        if trained_model is None:
+            messagebox.showwarning("No Model", "No trained model available to download.")
+            return
 
+        try:
             weights = trained_model.get_weights()
             weights_data = {
                 "model":   self.model,
@@ -889,7 +890,7 @@ class ServerUploadScreen(tk.Frame):
                  font=("Helvetica", 10, "bold"), bg=GREEN_LITE, fg=GREEN_DARK).pack(anchor="w")
 
         try:
-            from train import trained_model
+            trained_model = _train_module.trained_model
             num_layers = len(trained_model.get_weights()) if trained_model else 0
             size_bytes = sum(w.nbytes for w in trained_model.get_weights()) if trained_model else 0
             size_str   = f"{size_bytes:,} bytes"
@@ -1048,8 +1049,13 @@ class UploadSuccessScreen(tk.Frame):
         center.pack(expand=True)
 
         # Determine success vs error from server response
-        is_error = isinstance(server_response, dict) and "error" in server_response
-        is_error = is_error or (isinstance(server_response, str) and server_response.startswith("❌"))
+        is_error = (
+            isinstance(server_response, dict) and "error" in server_response
+        ) or (
+            isinstance(server_response, str) and (
+                server_response.startswith("❌") or "failed" in server_response.lower()
+            )
+        ) or server_response is None
 
         icon_color = "#FEE2E2" if is_error else GREEN_LITE
         icon_border = "#F87171" if is_error else GREEN_MID
@@ -1071,7 +1077,8 @@ class UploadSuccessScreen(tk.Frame):
                  font=("Helvetica", 22, "bold"), bg=BG, fg=title_color).pack(pady=(0, 8))
 
         if is_error:
-            detail = str(server_response)
+            err_msg = server_response.get("error", str(server_response)) if isinstance(server_response, dict) else str(server_response)
+            detail = err_msg
         else:
             detail = (f"Model weights for {model.title()} ({epochs} epochs)\n"
                       f"have been successfully uploaded to the server.")
