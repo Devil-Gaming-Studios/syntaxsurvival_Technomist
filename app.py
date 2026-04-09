@@ -7,20 +7,6 @@ from tkinter import filedialog
 from tkinter import messagebox
 import tkinter.font as tkfont
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
-
-app = FastAPI()
-
-@app.get("/download")
-def download_app():
-    return FileResponse(
-        path="app.exe", 
-        filename="MediCareAI.exe", 
-        media_type="application/octet-stream"
-    )
-
-
 # ─────────────────────────────────────────
 #  IMPORT APP LOGIC
 # ─────────────────────────────────────────
@@ -515,10 +501,11 @@ class UploadScreen(tk.Frame):
                  font=("Helvetica", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
 
         # Hint changes based on model type
-        if self.model == "tumor":
+        if self.model in ("tumor", "xray"):
             hint = "Accepted formats: image folder (for tumor/image models)"
         else:
             hint = "Accepted formats: .csv (for tabular models)"
+
         tk.Label(card, text=hint,
                  font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(2, 8))
 
@@ -591,7 +578,7 @@ class UploadScreen(tk.Frame):
 
     def _browse(self):
         # Tumor model expects an image folder; heart/tabular models expect a CSV
-        if self.model == "tumor":
+        if self.model in ("tumor", "xray"):
             path = filedialog.askdirectory(title="Select Image Dataset Folder")
         else:
             path = filedialog.askopenfilename(
