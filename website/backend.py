@@ -268,7 +268,7 @@ async def predict(model_id: str, request: Request):
             for chunk in ask_gemini_stream(prompt):
                 yield json.dumps({"treatment_chunk": chunk}) + "\n"
 
-        return StreamingResponse(stream(), media_type="text/event-stream")   # ← move this OUT of stream()
+            return StreamingResponse(stream(), media_type="text/event-stream")   # ← move this OUT of stream()
 
     except Exception as e:
         return {"prediction": "Error", "treatment": str(e)}
