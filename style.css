@@ -406,3 +406,54 @@ footer {
   background: var(--g-lite);
   color: var(--g-dark);
 }
+
+/* Tutorial nav button */
+.tutorial-btn {
+  background: rgba(195,239,216,.15);
+  border: 1px solid rgba(195,239,216,.35);
+  color: var(--g-lite) !important;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: .85rem;
+  font-weight: 600;
+  margin-left: 1rem;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+.tutorial-btn:hover {
+  background: rgba(195,239,216,.3);
+  color: var(--white) !important;
+}
+
+/* Tutorial Banner */
+.tutorial-banner {
+  background: linear-gradient(135deg, var(--g-dark) 0%, var(--g-mid) 100%);
+  padding: 2rem 2.5rem;
+}
+.tutorial-banner-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.tutorial-icon {
+  font-size: 2.5rem;
+  flex-shrink: 0;
+}
+.tutorial-text {
+  flex: 1;
+  min-width: 200px;
+}
+.tutorial-text h3 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.25rem;
+  color: var(--white);
+  margin-bottom: .3rem;
+}
+.tutorial-text p {
+  color: rgba(255,255,255,.7);
+  font-size: .9rem;
+  line-height: 1.6;
+}
