@@ -264,13 +264,22 @@ def upload_weights():
     weights      = trained_model.get_weights()
     weights_list = [w.tolist() for w in weights]
 
+    # ✅ FIX: compress payload to reduce size before sending
+    import json, gzip
+
+    payload     = json.dumps({"weights": weights_list}).encode("utf-8")
+    compressed  = gzip.compress(payload)
+
     try:
         response = requests.post(
             f"{SERVER_URL}/send_weights",
-            json={"weights": weights_list},
-            timeout=30
+            data=compressed,                          # send raw compressed bytes
+            headers={
+                "Content-Type":     "application/json",
+                "Content-Encoding": "gzip",           # tell server it's gzip
+            },
+            timeout=120                               # ✅ FIX: was 30, now 120s
         )
-        # Server may return empty body on success — handle gracefully
         try:
             return response.json()
         except Exception:
@@ -285,7 +294,6 @@ def upload_weights():
         return {"error": "Server timed out. It may be waking up (free tier) — try again in 30 seconds."}
     except Exception as e:
         return {"error": f"Upload failed: {str(e)}"}
-
 
 # ================================
 # 🚀 MAIN TRAIN FUNCTION
