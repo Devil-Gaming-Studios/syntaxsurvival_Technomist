@@ -8,6 +8,20 @@ from tkinter import messagebox
 import tkinter.font as tkfont
 
 # ─────────────────────────────────────────
+#  IMPORT APP LOGIC
+# ─────────────────────────────────────────
+from train import train_and_upload, upload_weights, predict_disease, detect_data_type
+
+# ─────────────────────────────────────────
+#  MODEL ID MAPPING
+#  Maps UI model keys → backend model_id strings
+# ─────────────────────────────────────────
+MODEL_ID_MAP = {
+    "tumor": "xray",    # image model
+    "heart": "heart",   # tabular model
+}
+
+# ─────────────────────────────────────────
 #  THEME
 # ─────────────────────────────────────────
 BG         = "#F4FAF6"
@@ -62,6 +76,10 @@ class App(tk.Tk):
         self.state("zoomed")
         self.resizable(True, True)
         self.configure(bg=BG)
+        # Shared state across screens
+        self.filepath = None
+        self.train_result = None   # return value from train_and_upload()
+        self.upload_result = None  # return value from upload_weights()
         self.show_login()
 
     def clear(self):
@@ -88,21 +106,22 @@ class App(tk.Tk):
         self.clear()
         LoadingScreen(self, model, filepath, epochs)
 
-    def show_result(self, model, filepath, epochs):
-        self.filepath = filepath   # ✅ store it
+    def show_result(self, model, filepath, epochs, train_result=None):
+        self.filepath = filepath
+        self.train_result = train_result
         self.clear()
-        ResultScreen(self, model, filepath, epochs)
-        
-    def show_upload_server(self, model, epochs, weights):
+        ResultScreen(self, model, filepath, epochs, train_result)
+
+    def show_upload_server(self, model, epochs):
         self.clear()
-        ServerUploadScreen(self, model, epochs, weights)
-        
-    def show_server_loading(self, model, epochs, weights):
+        ServerUploadScreen(self, model, epochs)
+
+    def show_server_loading(self, model, epochs):
         self.clear()
-        ServerLoadingScreen(self, model, epochs, weights)
+        ServerLoadingScreen(self, model, epochs)
 
 # ─────────────────────────────────────────
-#  LOGIN SCREEN
+#  LOGIN SCREEN  (unchanged)
 # ─────────────────────────────────────────
 class LoginScreen(tk.Frame):
     def __init__(self, master):
@@ -110,10 +129,8 @@ class LoginScreen(tk.Frame):
         self.master = master
         self.pack(fill="both", expand=True)
 
-        # Top accent bar
         tk.Frame(self, height=5, bg=GREEN_DARK).pack(fill="x")
 
-        # Logo / header area
         header = tk.Frame(self, bg=GREEN_DARK)
         header.pack(fill="x")
         tk.Label(header, text="✚  MediCare Portal",
@@ -121,7 +138,6 @@ class LoginScreen(tk.Frame):
                  bg=GREEN_DARK, fg=WHITE,
                  pady=18).pack()
 
-        # Card
         card = tk.Frame(self, bg=WHITE, padx=40, pady=30,
                         highlightthickness=1,
                         highlightbackground=BORDER)
@@ -131,12 +147,10 @@ class LoginScreen(tk.Frame):
         label(card, "Sign in to access your medical portal",
               color=GRAY).pack(anchor="w", pady=(0,20))
 
-        # Username
         label(card, "Username or Staff ID", size=10, color=GRAY).pack(anchor="w")
         self.username = styled_entry(card)
         self.username.pack(fill="x", pady=(4, 14), ipady=6)
 
-        # Password
         label(card, "Password", size=10, color=GRAY).pack(anchor="w")
         self.password = styled_entry(card, show="•")
         self.password.pack(fill="x", pady=(4, 20), ipady=6)
@@ -157,7 +171,7 @@ class LoginScreen(tk.Frame):
             self.master.show_terms()
 
 # ─────────────────────────────────────────
-#  TERMS & CONDITIONS SCREEN
+#  TERMS SCREEN  (unchanged)
 # ─────────────────────────────────────────
 class TermsScreen(tk.Frame):
     def __init__(self, master):
@@ -176,7 +190,6 @@ class TermsScreen(tk.Frame):
         tk.Label(self, text="Please read and accept before continuing.",
                  font=("Helvetica", 11), bg=BG, fg=GRAY).pack(pady=(16, 8))
 
-        # Scrollable text box
         box_frame = tk.Frame(self, bg=WHITE,
                              highlightthickness=1,
                              highlightbackground=BORDER)
@@ -220,7 +233,6 @@ class TermsScreen(tk.Frame):
         self.text.insert("1.0", terms)
         self.text.config(state="disabled")
 
-        # Checkbox + buttons
         bottom = tk.Frame(self, bg=BG)
         bottom.pack(fill="x", padx=120, pady=14)
 
@@ -250,8 +262,9 @@ class TermsScreen(tk.Frame):
 
     def decline(self):
         self.master.destroy()
+
 # ─────────────────────────────────────────
-#  MAIN SCREEN
+#  MAIN SCREEN  (unchanged)
 # ─────────────────────────────────────────
 class MainScreen(tk.Frame):
     def __init__(self, master):
@@ -260,14 +273,12 @@ class MainScreen(tk.Frame):
 
         tk.Frame(self, height=5, bg=GREEN_DARK).pack(fill="x")
 
-        # Header
         header = tk.Frame(self, bg=GREEN_DARK)
         header.pack(fill="x")
         tk.Label(header, text="✚  MediCare Portal",
                  font=("Helvetica", 15, "bold"),
                  bg=GREEN_DARK, fg=WHITE, pady=14).pack()
 
-        # Search bar
         search_frame = tk.Frame(self, bg=BG)
         search_frame.pack(fill="x", padx=200, pady=(24, 16))
 
@@ -291,11 +302,9 @@ class MainScreen(tk.Frame):
 
         styled_button(search_row, "Search", self.do_search).pack(side="right", padx=6, pady=4)
 
-        # Section label
         tk.Label(self, text="Select a diagnostic model",
                  font=("Helvetica", 12, "bold"), bg=BG, fg=TEXT).pack(pady=(8, 12))
 
-        # Model cards row
         self.selected = tk.StringVar(value="")
 
         cards_frame = tk.Frame(self, bg=BG)
@@ -310,7 +319,6 @@ class MainScreen(tk.Frame):
         for key, title, desc in models:
             self._make_card(cards_frame, key, title, desc)
 
-        # Custom model option
         custom_frame = tk.Frame(self, bg=BG)
         custom_frame.pack(padx=200, fill="x", pady=(12, 0))
 
@@ -334,11 +342,9 @@ class MainScreen(tk.Frame):
 
         styled_button(input_row, "+ Add", self._add_custom).pack(side="right", padx=6, pady=4)
 
-        # Proceed button
         styled_button(self, "Proceed with Selected Model →",
                       self._proceed).pack(pady=28)
 
-        # Status label
         self.status = tk.Label(self, text="", font=("Helvetica", 10),
                                bg=BG, fg=GRAY)
         self.status.pack()
@@ -353,37 +359,32 @@ class MainScreen(tk.Frame):
                   padx=(0, 12) if not custom else 0,
                   pady=(0, 8))
 
-        title_label = tk.Label(card, text=title,
-                               font=("Helvetica", 13, "bold"),
-                               bg=WHITE, fg=GREEN_DARK)
-        title_label.pack(anchor="w")
+        tk.Label(card, text=title,
+                 font=("Helvetica", 13, "bold"),
+                 bg=WHITE, fg=GREEN_DARK).pack(anchor="w")
 
-        desc_label = tk.Label(card, text=desc,
-                              font=("Helvetica", 9),
-                              bg=WHITE, fg=GRAY,
-                              wraplength=220, justify="left")
-        desc_label.pack(anchor="w", pady=(4, 10))
+        tk.Label(card, text=desc,
+                 font=("Helvetica", 9),
+                 bg=WHITE, fg=GRAY,
+                 wraplength=220, justify="left").pack(anchor="w", pady=(4, 10))
 
-        select_btn = tk.Button(card, text="Select",
-                               font=("Helvetica", 10),
-                               bg=GREEN_LITE, fg=GREEN_DARK,
-                               activebackground=GREEN_MID,
-                               activeforeground=WHITE,
-                               relief="flat", cursor="hand2",
-                               command=lambda k=key, c=card, t=title: self._select(k, c, t))
-        select_btn.pack(anchor="w")
+        tk.Button(card, text="Select",
+                  font=("Helvetica", 10),
+                  bg=GREEN_LITE, fg=GREEN_DARK,
+                  activebackground=GREEN_MID,
+                  activeforeground=WHITE,
+                  relief="flat", cursor="hand2",
+                  command=lambda k=key, c=card, t=title: self._select(k, c, t)).pack(anchor="w")
 
         self.card_frames[key] = card
         return card
 
     def _select(self, key, card, title):
-        # Reset all cards
         for k, c in self.card_frames.items():
             c.config(highlightbackground=BORDER, highlightthickness=2, bg=WHITE)
             for child in c.winfo_children():
                 child.config(bg=WHITE)
 
-        # Highlight selected
         card.config(highlightbackground=GREEN_DARK, highlightthickness=2, bg=GREEN_LITE)
         for child in card.winfo_children():
             child.config(bg=GREEN_LITE)
@@ -410,12 +411,9 @@ class MainScreen(tk.Frame):
             messagebox.showinfo("Exists", f'"{name}" is already added.')
             return
 
-        # Add new card below existing ones in a new row
-        container = list(self.card_frames.values())[0].master
         new_frame = tk.Frame(self, bg=BG)
         new_frame.pack(padx=200, fill="x", pady=(0, 4))
 
-        self._make_card.__func__
         card = tk.Frame(new_frame, bg=WHITE, padx=20, pady=16,
                         highlightthickness=2,
                         highlightbackground=BORDER,
@@ -432,7 +430,6 @@ class MainScreen(tk.Frame):
 
         self.card_frames[name] = card
 
-        # Clear entry
         self.custom_entry.delete(0, "end")
         self._restore_placeholder(None)
         self.status.config(text=f'Model "{name}" added.', fg=GREEN_MID)
@@ -451,6 +448,8 @@ class MainScreen(tk.Frame):
 
 # ─────────────────────────────────────────
 #  UPLOAD SCREEN
+#  Collects: filepath, epochs
+#  Passes to: LoadingScreen → train_and_upload()
 # ─────────────────────────────────────────
 class UploadScreen(tk.Frame):
     def __init__(self, master, model):
@@ -467,7 +466,6 @@ class UploadScreen(tk.Frame):
                  font=("Helvetica", 15, "bold"),
                  bg=GREEN_DARK, fg=WHITE, pady=14).pack()
 
-        # Card
         card = tk.Frame(self, bg=WHITE, padx=40, pady=30,
                         highlightthickness=1,
                         highlightbackground=BORDER)
@@ -485,7 +483,13 @@ class UploadScreen(tk.Frame):
         # ── Dataset upload ──
         tk.Label(card, text="Dataset File",
                  font=("Helvetica", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
-        tk.Label(card, text="Accepted formats: .json, .csv",
+
+        # Hint changes based on model type
+        if self.model == "tumor":
+            hint = "Accepted formats: image folder (for tumor/image models)"
+        else:
+            hint = "Accepted formats: .csv (for tabular models)"
+        tk.Label(card, text=hint,
                  font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(2, 8))
 
         drop_zone = tk.Frame(card, bg=GREEN_LITE,
@@ -548,28 +552,27 @@ class UploadScreen(tk.Frame):
 
         tk.Frame(card, height=1, bg=BORDER).pack(fill="x", pady=16)
 
-        # ── Buttons ──
         btn_row = tk.Frame(card, bg=WHITE)
         btn_row.pack(fill="x")
-        styled_button(
-            btn_row,
-            "← Back",
-            lambda: self.master.show_result(self.model, self.master.filepath, self.epochs),
-            secondary=True
-        ).pack(side="left", padx=(0, 8))
+        styled_button(btn_row, "← Back", self.master.show_main,
+                      secondary=True).pack(side="left", padx=(0, 8))
         styled_button(btn_row, "Run Model →", self._run).pack(side="right")
         self.unbind_all("<Return>")
 
     def _browse(self):
-        path = filedialog.askopenfilename(
-            title="Select Dataset",
-            filetypes=[("JSON files", "*.json"),
-                       ("CSV files", "*.csv"),
-                       ("All files", "*.*")]
-        )
+        # Tumor model expects an image folder; heart/tabular models expect a CSV
+        if self.model == "tumor":
+            path = filedialog.askdirectory(title="Select Image Dataset Folder")
+        else:
+            path = filedialog.askopenfilename(
+                title="Select Dataset",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
         if path:
             self.filepath = path
-            self.file_label.config(text=f"✔  {os.path.basename(path)}", fg=GREEN_DARK)
+            self.file_label.config(
+                text=f"✔  {os.path.basename(path)}", fg=GREEN_DARK
+            )
 
     def _inc_epoch(self):
         val = self.epoch_var.get()
@@ -605,14 +608,16 @@ class UploadScreen(tk.Frame):
 
 # ─────────────────────────────────────────
 #  LOADING SCREEN
+#  Calls train_and_upload() in background thread
+#  Passes result → ResultScreen
 # ─────────────────────────────────────────
 class LoadingScreen(tk.Frame):
     def __init__(self, master, model, filepath, epochs):
         super().__init__(master, bg=BG)
-        self.master = master
-        self.model = model
+        self.master   = master
+        self.model    = model
         self.filepath = filepath
-        self.epochs = epochs 
+        self.epochs   = epochs
         self.pack(fill="both", expand=True)
 
         tk.Frame(self, height=5, bg=GREEN_DARK).pack(fill="x")
@@ -622,7 +627,6 @@ class LoadingScreen(tk.Frame):
                  font=("Helvetica", 15, "bold"),
                  bg=GREEN_DARK, fg=WHITE, pady=14).pack()
 
-        # Center content
         center = tk.Frame(self, bg=BG)
         center.pack(expand=True)
 
@@ -631,7 +635,6 @@ class LoadingScreen(tk.Frame):
         tk.Label(center, text=f"Running {self.model.title()} model — please wait...",
                  font=("Helvetica", 11), bg=BG, fg=GRAY).pack(pady=(0, 30))
 
-        # Progress bar (manual)
         bar_bg = tk.Frame(center, bg=BORDER, height=12, width=400)
         bar_bg.pack(pady=(0, 8))
         bar_bg.pack_propagate(False)
@@ -648,9 +651,10 @@ class LoadingScreen(tk.Frame):
                                    font=("Helvetica", 10), bg=BG, fg=GRAY)
         self.step_label.pack(pady=(6, 0))
 
-        # Start processing in background
-        self.duration = 10
-        self.start_time = time.time()
+        # Progress animation runs independently; actual training drives completion
+        self._train_result = None
+        self._train_done   = False
+        self._anim_start   = time.time()
         self._animate()
 
         threading.Thread(target=self._process, daemon=True).start()
@@ -665,30 +669,58 @@ class LoadingScreen(tk.Frame):
         return "Finalizing..."
 
     def _animate(self):
-        elapsed = time.time() - self.start_time
-        pct = min(int((elapsed / self.duration) * 100), 99)
+        if self._train_done:
+            # Snap to 100 % and move on
+            self.bar_fill.place(x=0, y=0, relheight=1, width=400)
+            self.pct_label.config(text="100%")
+            self.step_label.config(text="Complete!")
+            self.after(300, lambda: self.master.show_result(
+                self.model, self.filepath, self.epochs, self._train_result))
+            return
+
+        elapsed = time.time() - self._anim_start
+        # Cap at 95 % while still training
+        pct = min(int((elapsed / 30) * 95), 95)
         self.bar_fill.place(x=0, y=0, relheight=1, width=int(400 * pct / 100))
         self.pct_label.config(text=f"{pct}%")
         self.step_label.config(text=self._steps(pct))
-        if elapsed < self.duration:
-            self.after(100, self._animate)
+        self.after(200, self._animate)
 
     def _process(self):
-        time.sleep(self.duration)
-        self.after(0, lambda: self.master.show_result(self.model, self.filepath, self.epochs))
+        """
+        Calls train_and_upload() from train.py with the correct arguments:
+          - path      : file or folder path from UploadScreen
+          - epochs    : integer from the epoch widget
+          - model_id  : resolved via MODEL_ID_MAP; falls back to the raw key
+                        so custom models also work (server will handle unknown IDs)
+        """
+        model_id = MODEL_ID_MAP.get(self.model, self.model)
+        try:
+            result = train_and_upload(
+                path=self.filepath,
+                epochs=self.epochs,
+                use_server_model=True,
+                model_id=model_id,
+            )
+        except Exception as exc:
+            result = f"Error: {exc}"
 
+        self._train_result = result
+        self._train_done   = True  # _animate() will pick this up on next tick
 
 # ─────────────────────────────────────────
 #  RESULT SCREEN
+#  Shows train_result string + lets user
+#  download placeholder weights or upload
 # ─────────────────────────────────────────
 class ResultScreen(tk.Frame):
-    def __init__(self, master, model, filepath, epochs):
+    def __init__(self, master, model, filepath, epochs, train_result=None):
         super().__init__(master, bg=BG)
-        self.master   = master
-        self.model    = model
-        self.filepath = filepath
-        self.epochs   = epochs
-        self.weights  = None
+        self.master      = master
+        self.model       = model
+        self.filepath    = filepath
+        self.epochs      = epochs
+        self.train_result = train_result
         self.pack(fill="both", expand=True)
 
         tk.Frame(self, height=5, bg=GREEN_DARK).pack(fill="x")
@@ -698,7 +730,6 @@ class ResultScreen(tk.Frame):
                  font=("Helvetica", 15, "bold"),
                  bg=GREEN_DARK, fg=WHITE, pady=14).pack()
 
-        # Top row
         top = tk.Frame(self, bg=BG)
         top.pack(fill="x", padx=120, pady=(20, 4))
         tk.Label(top, text="Training Complete",
@@ -706,13 +737,27 @@ class ResultScreen(tk.Frame):
         styled_button(top, "⟵ Run Another", self.master.show_main,
                       secondary=True).pack(side="right")
 
+        fname = os.path.basename(filepath) if filepath else "—"
         tk.Label(self,
-                 text=f"Model: {model.title()}  •  File: {os.path.basename(filepath)}  •  Epochs: {epochs}",
+                 text=f"Model: {model.title()}  •  File: {fname}  •  Epochs: {epochs}",
                  font=("Helvetica", 10), bg=BG, fg=GRAY).pack(anchor="w", padx=120)
 
-        tk.Frame(self, height=1, bg=BORDER).pack(fill="x", padx=120, pady=12)
+        # ── Training result banner ──
+        result_text = train_result if train_result else "No result returned."
+        result_color = GREEN_DARK if "completed" in str(result_text).lower() else "#B91C1C"
 
-        # Weights preview card
+        result_banner = tk.Frame(self, bg=WHITE, padx=20, pady=12,
+                                 highlightthickness=1,
+                                 highlightbackground=BORDER)
+        result_banner.pack(fill="x", padx=120, pady=(12, 8))
+        tk.Label(result_banner, text="Training Result",
+                 font=("Helvetica", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+        tk.Label(result_banner, text=result_text,
+                 font=("Helvetica", 11), bg=WHITE, fg=result_color).pack(anchor="w", pady=(4, 0))
+
+        tk.Frame(self, height=1, bg=BORDER).pack(fill="x", padx=120, pady=8)
+
+        # ── Weights preview (fetched from the trained model via upload_weights dry-run) ──
         preview_card = tk.Frame(self, bg=WHITE, padx=20, pady=16,
                                 highlightthickness=1,
                                 highlightbackground=BORDER)
@@ -720,57 +765,75 @@ class ResultScreen(tk.Frame):
 
         tk.Label(preview_card, text="Model Weights Output",
                  font=("Helvetica", 12, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
-        tk.Label(preview_card, text="Preview of the generated weights JSON (first 6 keys shown).",
+        tk.Label(preview_card,
+                 text="Preview of the trained model weights (structure summary).",
                  font=("Helvetica", 9), bg=WHITE, fg=GRAY).pack(anchor="w", pady=(2, 12))
 
-        self.weights = self._generate_weights()
+        # Build a lightweight JSON preview from the real trained model
+        preview_text = self._build_weights_preview()
 
-        preview = dict(list(self.weights.items())[:6])
         text_widget = tk.Text(preview_card, font=("Courier", 10),
                               bg=GRAY_LITE, fg=TEXT,
                               relief="flat", height=14,
                               padx=12, pady=12)
-        text_widget.insert("1.0", json.dumps(preview, indent=2))
+        text_widget.insert("1.0", preview_text)
         text_widget.config(state="disabled")
         text_widget.pack(fill="x")
 
-        # Download
         btn_row = tk.Frame(self, bg=BG)
         btn_row.pack(pady=16)
 
         styled_button(btn_row, "⬇  Download Weights as JSON",
-                    self._download, secondary=True).pack(side="left", padx=(0, 12))
+                      self._download, secondary=True).pack(side="left", padx=(0, 12))
         styled_button(btn_row, "☁  Upload to Server →",
-                    self._upload_to_server).pack(side="left")
+                      self._upload_to_server).pack(side="left")
 
-    def _generate_weights(self):
+    def _build_weights_preview(self):
         """
-        Placeholder — replace this with your actual backend call.
-        Simulates a weights JSON output based on model + epochs.
+        Pulls the real weights from the trained model (train.py's global)
+        and returns a JSON-formatted preview string.
+        Falls back to a helpful message if no model is trained yet.
         """
-        import random
-        random.seed(42)
-        layers = {
-            "tumor":  ["conv1", "conv2", "conv3", "fc1", "fc2", "output"],
-            "heart":  ["input_layer", "dense1", "dense2", "dense3", "output"],
-        }.get(self.model, ["layer1", "layer2", "layer3", "output"])
+        try:
+            from train import trained_model, last_config
+            if trained_model is None:
+                return json.dumps({"status": "no model trained yet"}, indent=2)
 
-        weights = {
-            "model":  self.model,
-            "epochs": self.epochs,
-            "file":   os.path.basename(self.filepath),
-        }
-        for layer in layers:
-            weights[layer] = {
-                "weights": [round(random.uniform(-1, 1), 6)
-                            for _ in range(8)],
-                "bias":    [round(random.uniform(-0.5, 0.5), 6)
-                            for _ in range(4)],
-                "trained_epochs": self.epochs,
+            weights = trained_model.get_weights()
+            preview = {
+                "model":   self.model,
+                "epochs":  self.epochs,
+                "config":  last_config,
+                "layers":  len(weights),
+                "shapes":  [list(w.shape) for w in weights],
+                # Show first layer's first few values as a sample
+                "sample_layer_0": weights[0].flatten()[:8].tolist() if len(weights) > 0 else [],
             }
-        return weights
+            return json.dumps(preview, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
     def _download(self):
+        """
+        Saves the full trained model weights to a JSON file chosen by the user.
+        Uses the real weights from train.py's global trained_model.
+        """
+        try:
+            from train import trained_model
+            if trained_model is None:
+                messagebox.showwarning("No Model", "No trained model available to download.")
+                return
+
+            weights = trained_model.get_weights()
+            weights_data = {
+                "model":   self.model,
+                "epochs":  self.epochs,
+                "weights": [w.tolist() for w in weights],
+            }
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not read weights:\n{e}")
+            return
+
         save_path = filedialog.asksaveasfilename(
             defaultextension=".json",
             filetypes=[("JSON files", "*.json")],
@@ -779,23 +842,21 @@ class ResultScreen(tk.Frame):
         )
         if save_path:
             with open(save_path, "w") as f:
-                json.dump(self.weights, f, indent=2)
-            messagebox.showinfo("Saved", f"Weights saved to:\n{save_path}")    
-            
-            
+                json.dump(weights_data, f, indent=2)
+            messagebox.showinfo("Saved", f"Weights saved to:\n{save_path}")
+
     def _upload_to_server(self):
-        self.master.show_upload_server(self.model, self.epochs, self.weights)     
-        
+        self.master.show_upload_server(self.model, self.epochs)
+
 # ─────────────────────────────────────────
-#  SERVER UPLOAD SCREEN
+#  SERVER UPLOAD SCREEN  (unchanged visually)
 # ─────────────────────────────────────────
 class ServerUploadScreen(tk.Frame):
-    def __init__(self, master, model, epochs, weights):
+    def __init__(self, master, model, epochs):
         super().__init__(master, bg=BG)
-        self.master  = master
-        self.model   = model
-        self.epochs  = epochs
-        self.weights = weights
+        self.master = master
+        self.model  = model
+        self.epochs = epochs
         self.pack(fill="both", expand=True)
 
         tk.Frame(self, height=5, bg=GREEN_DARK).pack(fill="x")
@@ -805,7 +866,6 @@ class ServerUploadScreen(tk.Frame):
                  font=("Helvetica", 15, "bold"),
                  bg=GREEN_DARK, fg=WHITE, pady=14).pack()
 
-        # Card
         card = tk.Frame(self, bg=WHITE, padx=40, pady=30,
                         highlightthickness=1,
                         highlightbackground=BORDER)
@@ -818,7 +878,7 @@ class ServerUploadScreen(tk.Frame):
 
         tk.Frame(card, height=1, bg=BORDER).pack(fill="x", pady=(0, 16))
 
-        # Summary
+        # Summary — pull real info from the trained model
         summary = tk.Frame(card, bg=GREEN_LITE,
                            highlightthickness=1,
                            highlightbackground=BORDER,
@@ -828,11 +888,20 @@ class ServerUploadScreen(tk.Frame):
         tk.Label(summary, text="Upload Summary",
                  font=("Helvetica", 10, "bold"), bg=GREEN_LITE, fg=GREEN_DARK).pack(anchor="w")
 
+        try:
+            from train import trained_model
+            num_layers = len(trained_model.get_weights()) if trained_model else 0
+            size_bytes = sum(w.nbytes for w in trained_model.get_weights()) if trained_model else 0
+            size_str   = f"{size_bytes:,} bytes"
+        except Exception:
+            num_layers = "—"
+            size_str   = "—"
+
         for key, val in [
             ("Model",   self.model.title()),
             ("Epochs",  str(self.epochs)),
-            ("Layers",  str(len(self.weights) - 3)),  # minus meta keys
-            ("Size",    f"{len(json.dumps(self.weights))} bytes"),
+            ("Layers",  str(num_layers)),
+            ("Size",    size_str),
         ]:
             row = tk.Frame(summary, bg=GREEN_LITE)
             row.pack(fill="x", pady=2)
@@ -842,7 +911,6 @@ class ServerUploadScreen(tk.Frame):
             tk.Label(row, text=val,
                      font=("Helvetica", 10, "bold"), bg=GREEN_LITE, fg=TEXT).pack(side="left")
 
-        # Server URL
         tk.Label(card, text="Server Endpoint",
                  font=("Helvetica", 10), bg=WHITE, fg=GRAY).pack(anchor="w")
 
@@ -853,33 +921,34 @@ class ServerUploadScreen(tk.Frame):
         self.url_entry = tk.Entry(url_frame, font=("Helvetica", 11),
                                   bg=WHITE, fg=TEXT, relief="flat",
                                   insertbackground=GREEN_DARK)
-        self.url_entry.insert(0, "https://api.medicare-server.com/upload")
+        self.url_entry.insert(0, "https://syntaxsurvival-technomist-2.onrender.com/send_weights")
         self.url_entry.pack(fill="x", ipady=8, padx=10)
 
         tk.Frame(card, height=1, bg=BORDER).pack(fill="x", pady=(0, 16))
 
         btn_row = tk.Frame(card, bg=WHITE)
         btn_row.pack(fill="x")
-        styled_button(btn_row, "← Back", lambda: self.master.show_result(
-                      self.model, None, self.epochs),
+        styled_button(btn_row, "← Back",
+                      lambda: self.master.show_result(self.model, self.master.filepath, self.epochs),
                       secondary=True).pack(side="left", padx=(0, 8))
         styled_button(btn_row, "Upload Now →",
                       self._start_upload).pack(side="right")
 
     def _start_upload(self):
-        self.master.show_server_loading(self.model, self.epochs, self.weights)
-
+        self.master.show_server_loading(self.model, self.epochs)
 
 # ─────────────────────────────────────────
 #  SERVER LOADING SCREEN
+#  Calls upload_weights() from train.py
 # ─────────────────────────────────────────
 class ServerLoadingScreen(tk.Frame):
-    def __init__(self, master, model, epochs, weights):
+    def __init__(self, master, model, epochs):
         super().__init__(master, bg=BG)
         self.master  = master
         self.model   = model
         self.epochs  = epochs
-        self.weights = weights
+        self._upload_result = None
+        self._upload_done   = False
         self.pack(fill="both", expand=True)
 
         tk.Frame(self, height=5, bg=GREEN_DARK).pack(fill="x")
@@ -897,7 +966,6 @@ class ServerLoadingScreen(tk.Frame):
         tk.Label(center, text="Sending model weights — please do not close the app.",
                  font=("Helvetica", 11), bg=BG, fg=GRAY).pack(pady=(0, 30))
 
-        # Progress bar
         bar_bg = tk.Frame(center, bg=BORDER, height=12, width=400)
         bar_bg.pack(pady=(0, 8))
         bar_bg.pack_propagate(False)
@@ -914,11 +982,10 @@ class ServerLoadingScreen(tk.Frame):
                                    font=("Helvetica", 10), bg=BG, fg=GRAY)
         self.step_label.pack(pady=(6, 0))
 
-        self.duration   = 8
-        self.start_time = time.time()
+        self._anim_start = time.time()
         self._animate()
 
-        threading.Thread(target=self._upload, daemon=True).start()
+        threading.Thread(target=self._do_upload, daemon=True).start()
 
     def _steps(self, pct):
         if pct < 15:  return "Connecting to server..."
@@ -929,28 +996,43 @@ class ServerLoadingScreen(tk.Frame):
         return "Finalizing..."
 
     def _animate(self):
-        elapsed = time.time() - self.start_time
-        pct = min(int((elapsed / self.duration) * 100), 99)
+        if self._upload_done:
+            self.bar_fill.place(x=0, y=0, relheight=1, width=400)
+            self.pct_label.config(text="100%")
+            self.step_label.config(text="Done!")
+            self.after(300, self._show_success)
+            return
+
+        elapsed = time.time() - self._anim_start
+        pct = min(int((elapsed / 15) * 90), 90)
         self.bar_fill.place(x=0, y=0, relheight=1, width=int(400 * pct / 100))
         self.pct_label.config(text=f"{pct}%")
         self.step_label.config(text=self._steps(pct))
-        if elapsed < self.duration:
-            self.after(100, self._animate)
+        self.after(200, self._animate)
 
-    def _upload(self):
-        time.sleep(self.duration)
-        self.after(0, self._show_success)
+    def _do_upload(self):
+        """
+        Calls upload_weights() from train.py which POSTs to
+        SERVER_URL/send_weights with the real trained model weights.
+        """
+        try:
+            result = upload_weights()
+        except Exception as exc:
+            result = {"error": str(exc)}
+
+        self._upload_result = result
+        self._upload_done   = True
 
     def _show_success(self):
         self.master.clear()
-        UploadSuccessScreen(self.master, self.model, self.epochs)
-
+        UploadSuccessScreen(self.master, self.model, self.epochs, self._upload_result)
 
 # ─────────────────────────────────────────
 #  UPLOAD SUCCESS SCREEN
+#  Shows server response from upload_weights()
 # ─────────────────────────────────────────
 class UploadSuccessScreen(tk.Frame):
-    def __init__(self, master, model, epochs):
+    def __init__(self, master, model, epochs, server_response=None):
         super().__init__(master, bg=BG)
         self.master = master
         self.pack(fill="both", expand=True)
@@ -965,24 +1047,54 @@ class UploadSuccessScreen(tk.Frame):
         center = tk.Frame(self, bg=BG)
         center.pack(expand=True)
 
-        # Success icon
-        icon_frame = tk.Frame(center, bg=GREEN_LITE,
+        # Determine success vs error from server response
+        is_error = isinstance(server_response, dict) and "error" in server_response
+        is_error = is_error or (isinstance(server_response, str) and server_response.startswith("❌"))
+
+        icon_color = "#FEE2E2" if is_error else GREEN_LITE
+        icon_border = "#F87171" if is_error else GREEN_MID
+        icon_text  = "✗" if is_error else "✔"
+        icon_fg    = "#B91C1C" if is_error else GREEN_DARK
+        title_text = "Upload Failed" if is_error else "Upload Successful!"
+        title_color = "#B91C1C" if is_error else GREEN_DARK
+
+        icon_frame = tk.Frame(center, bg=icon_color,
                               highlightthickness=2,
-                              highlightbackground=GREEN_MID,
+                              highlightbackground=icon_border,
                               width=80, height=80)
         icon_frame.pack(pady=(0, 20))
         icon_frame.pack_propagate(False)
-        tk.Label(icon_frame, text="✔", font=("Helvetica", 32, "bold"),
-                 bg=GREEN_LITE, fg=GREEN_DARK).place(relx=0.5, rely=0.5, anchor="center")
+        tk.Label(icon_frame, text=icon_text, font=("Helvetica", 32, "bold"),
+                 bg=icon_color, fg=icon_fg).place(relx=0.5, rely=0.5, anchor="center")
 
-        tk.Label(center, text="Upload Successful!",
-                 font=("Helvetica", 22, "bold"), bg=BG, fg=GREEN_DARK).pack(pady=(0, 8))
-        tk.Label(center, text=f"Model weights for {model.title()} ({epochs} epochs)\nhave been successfully uploaded to the server.",
-                 font=("Helvetica", 11), bg=BG, fg=GRAY, justify="center").pack(pady=(0, 30))
+        tk.Label(center, text=title_text,
+                 font=("Helvetica", 22, "bold"), bg=BG, fg=title_color).pack(pady=(0, 8))
 
-        styled_button(center, "Return to Home", self.master.show_main).pack()        
+        if is_error:
+            detail = str(server_response)
+        else:
+            detail = (f"Model weights for {model.title()} ({epochs} epochs)\n"
+                      f"have been successfully uploaded to the server.")
+        tk.Label(center, text=detail,
+                 font=("Helvetica", 11), bg=BG, fg=GRAY, justify="center").pack(pady=(0, 12))
 
-   
+        # Show raw server response if available
+        if server_response and isinstance(server_response, dict):
+            resp_frame = tk.Frame(center, bg=GRAY_LITE,
+                                  highlightthickness=1,
+                                  highlightbackground=BORDER,
+                                  padx=12, pady=10)
+            resp_frame.pack(pady=(0, 20))
+            tk.Label(resp_frame, text="Server Response:",
+                     font=("Helvetica", 9, "bold"), bg=GRAY_LITE, fg=GRAY).pack(anchor="w")
+            tk.Label(resp_frame,
+                     text=json.dumps(server_response, indent=2),
+                     font=("Courier", 9), bg=GRAY_LITE, fg=TEXT,
+                     justify="left").pack(anchor="w")
+
+        styled_button(center, "Return to Home", self.master.show_main).pack()
+
+
 if __name__ == "__main__":
     app = App()
     app.mainloop()
