@@ -84,12 +84,17 @@ def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
 
     data = pd.read_csv(file_path)
 
+    # ✅ FIX: encode non-numeric columns so mixed-type CSVs don't crash
+    for col in data.columns:
+        if data[col].dtype == object:
+            data[col] = pd.Categorical(data[col]).codes
+
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].values
 
     # Normalize safely
     X = X / (np.max(X, axis=0) + 1e-8)
-
+    # ... rest unchanged
     # ================================
     # 🧠 CONFIG
     # ================================
@@ -191,7 +196,8 @@ def train_image(folder_path, epochs, use_server_model=True, model_id="xray"):
         folder_path,
         target_size=(128, 128),
         batch_size=16,
-        class_mode='binary'
+        class_mode='binary',
+        classes=['no', 'yes']   # ✅ FIX: ignore Br35H-Mask-RCNN folder
     )
 
     # ================================
