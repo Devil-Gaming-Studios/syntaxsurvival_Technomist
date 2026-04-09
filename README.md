@@ -1,341 +1,159 @@
-**✚ MediCare AI**
+# PS-18 — Privacy Preservation in Healthcare Using Federated Learning
 
-Project Documentation & Setup Guide
+> **Disclaimer:** This system is for demonstration and academic purposes only. Not a certified medical device.
 
-Version 1.0 \| 2026
+---
 
-**1. Project Overview**
+## Overview
 
-MediCare AI is a full-stack medical diagnostic web application that
-combines machine learning models with Gemini AI to provide instant
-clinical diagnoses and personalised treatment plans across three medical
-conditions.
+Healthcare institutions need to collaborate on training AI diagnostic models, but patient data is highly sensitive and governed by strict regulations such as **HIPAA** and **GDPR**. Centralising data from multiple hospitals increases privacy risks and is often infeasible due to institutional data-sharing policies.
 
-The system accepts clinical parameters or medical images from users,
-runs them through trained ML models, and generates a RAG-based treatment
-plan using Google Gemini 1.5 Flash.
+**PS-18** solves this by implementing a Federated Learning-based system where multiple hospitals can collaboratively train AI models **without sharing raw patient data**. Only model weights or gradients are transmitted to a central aggregation server — raw records (EHRs, medical images, diagnostic reports) **never leave** the originating institution.
 
-  ---------------------- ------------------------------------------------
-  **Frontend**           Plain HTML, CSS, JavaScript
+---
 
-  **Backend**            Python FastAPI
+## System Architecture
 
-  **AI / RAG**           Google Gemini 1.5 Flash
+The system follows the standard federated learning topology:
 
-  **ML Models**          scikit-learn / Keras (placeholder --- swap in
-                         real models)
+```
+Hospital A (app.py)  ─┐
+Hospital B (app.py)  ──┼──► Central Aggregation Server ──► Global Model ──► Web Portal
+Hospital C (app.py)  ─┘          /send_weights (POST)        (FedAvg)       (Inference)
+```
 
-  **Image Model**        PIL + deep learning (COVID X-Ray)
-  ---------------------- ------------------------------------------------
+| Component | Description |
+|---|---|
+| **Hospital Clients (N nodes)** | Each runs `app.py` locally. Trains on private data, uploads weights only. |
+| **Central Aggregation Server** | Receives weights via `POST /send_weights`. Aggregates using FedAvg or similar. |
+| **Global Model** | The aggregated model used for inference in the web portal. |
+| **Web Portal** | Frontend for clinical staff to run predictions against the global model. |
 
-**2. Features**
+> 🔒 **Raw patient data never leaves each hospital's premises.** This is the core privacy guarantee of the system.
 
-**2.1 Diagnostic Modules**
+---
 
--   Diabetes Screening --- analyses glucose, HbA1c, BMI, hypertension,
-    and lifestyle factors
+## Components
 
--   Heart Disease Screening --- evaluates ECG, cholesterol, blood
-    pressure, exercise data
+The project is split into two main components:
 
--   COVID-19 X-Ray Analysis --- deep learning image classification on
-    chest X-rays
+### 1. Hospital Client Application (`app.py`)
+A desktop GUI built with Python (Tkinter) that runs at each participating hospital. Handles local dataset upload, local model training, and secure weight upload to the central server.
 
-**2.2 AI Treatment Plans**
+### 2. Diagnostic Web Portal (`index.html`, `style.css`, `script.js`)
+A browser-based interface allowing clinical staff to run inference using the aggregated model hosted on a FastAPI backend.
 
--   Each diagnosis triggers a Gemini AI call that generates a
-    structured, personalised treatment plan
+Together, these simulate the full federated learning pipeline:
 
--   Covers lifestyle changes, monitoring, medications, warning signs,
-    and follow-up care
+**Local Training → Weight Upload → Central Aggregation → Inference**
 
--   Falls back to hardcoded plans if Gemini API key is not configured
+---
 
-**2.3 Desktop Application (Tkinter)**
+## Tech Stack
 
--   Full-screen medical portal built with Python Tkinter
+| Component | Technology |
+|---|---|
+| Hospital Client UI | Python, Tkinter |
+| Local Model Training | Python (`training.py`) |
+| Weight Upload | Python `requests` / HTTP POST |
+| Web Portal Frontend | HTML, CSS, Vanilla JavaScript |
+| Web Portal Backend | FastAPI (Python) |
+| Treatment Plan Generation | Google Gemini AI |
+| Aggregation Server Hosting | Render (`syntaxsurvival-technomist-2.onrender.com`) |
 
--   Login screen with pseudo-authentication
+---
 
--   Terms & Conditions screen with scrollable text and checkbox
-    agreement
+## Hospital Client — Screen Flow
 
--   Model selection screen with Tumor Detection and Heart Disease models
+| Screen | Purpose |
+|---|---|
+| **Login Screen** | Staff ID and password entry. Demo mode — no real auth backend. |
+| **Terms & Conditions** | Staff must read and accept data handling terms before proceeding. |
+| **Main Screen** | Lists available diagnostic models from the server. Supports search and custom model registration. |
+| **Upload Screen** | Staff selects local dataset (CSV or image folder) and sets training epochs (default: 10). |
+| **Loading / Training Screen** | Runs `train_and_upload()` in a background thread. Progress bar animates. |
+| **Result Screen** | Displays training metrics: accuracy, loss, number of layers, model size. |
+| **Server Upload Screen** | Staff confirms the server endpoint URL and initiates weight upload. |
+| **Server Loading Screen** | Calls `upload_weights()` in background. Steps: Connecting → Serializing → Uploading → Verifying. |
+| **Upload Success / Error** | Confirms receipt of weights and displays raw server JSON response. |
 
--   Dataset upload with epoch configuration for training
+### Key Functions (`training.py`)
 
--   Animated loading/progress screens for training and server upload
+| Function | Description |
+|---|---|
+| `train_and_upload(model, filepath, epochs)` | Trains the model locally on the hospital's dataset and returns metrics. |
+| `upload_weights()` | Serializes trained weights and POSTs them to the central server endpoint. |
+| `get_models()` | Fetches available model list from server. Falls back to defaults if unreachable. |
+| `add_model_to_server(name, type)` | Registers a new custom model name on the central server. |
+| `predict_disease(model_id, data)` | Runs local inference for a given model and input. |
+| `detect_data_type(filepath)` | Determines whether a dataset is tabular (CSV) or image-based. |
 
--   Results screen with weights JSON preview and download
+### Supported Model Types
 
--   Server upload flow with success confirmation screen
+- **Tabular models** (e.g., Heart Disease) — accept CSV datasets with features like age, cholesterol, blood pressure.
+- **Image models** (e.g., Tumor / X-Ray) — accept a folder of images and use a CNN-based architecture.
 
-**3. Project Structure**
+---
 
-**medicare-web/**
+## Diagnostic Web Portal
 
-> backend/
->
-> main.py FastAPI app entry point
->
-> requirements.txt Python dependencies
->
-> .env Environment variables (Gemini API key)
->
-> models/
->
-> diabetes_model.py Diabetes prediction logic
->
-> heart_model.py Heart disease prediction logic
->
-> xray_model.py COVID X-ray prediction logic
->
-> routes/
->
-> diabetes.py POST /api/diabetes/predict
->
-> heart.py POST /api/heart/predict
->
-> xray.py POST /api/xray/predict
->
-> rag/
->
-> treatment.py Gemini AI treatment plan generator
->
-> frontend/
->
-> index.html Single-page portal
->
-> style.css Styling (DM Serif Display + DM Sans)
->
-> script.js Form rendering + API calls
->
-> app.py Tkinter desktop application
+### Supported Diagnostic Modules
 
-**4. Setup & Installation**
+| Module | Inputs | Endpoint |
+|---|---|---|
+| **Diabetes** | Gender, age, hypertension, heart disease history, smoking history, BMI, HbA1c, blood glucose | `POST /api/diabetes/predict` |
+| **Heart Disease** | Age, gender, cholesterol, resting blood pressure, max heart rate | `POST /api/heart/predict` |
+| **COVID-19 X-Ray** | Chest X-ray image upload (PNG/JPG) | `POST /api/xray/predict` |
 
-**4.1 Prerequisites**
+### Backend API Endpoints (FastAPI)
 
--   Python 3.10 (with tkinter --- use the official .exe installer,
-    enable tcl/tk)
+| Endpoint | Method | Input |
+|---|---|---|
+| `/api/diabetes/predict` | POST | JSON with 8 clinical parameters |
+| `/api/heart/predict` | POST | JSON with 5 cardiac parameters |
+| `/api/xray/predict` | POST | Multipart image file |
+| `/send_weights` | POST | Serialized model weights from hospital clients |
 
--   Node.js (optional, for frontend tooling)
+### Frontend Flow
 
--   A Google Gemini API key (free tier available at aistudio.google.com)
+1. User selects a condition from the dropdown or clicks a disease card.
+2. The relevant form is rendered dynamically via `renderForm()` in `script.js`.
+3. On submission, an async function sends a `POST` request to the FastAPI backend.
+4. The response `{ diagnosis, treatment_plan }` is displayed in a result card. Treatment plan is generated by Gemini AI.
 
-**4.2 Backend Setup**
+---
 
-Step 1 --- Create and activate a virtual environment:
+## Privacy & Security
 
-> py -3.10 -m venv venv
->
-> venv\\Scripts\\activate
+- 🔒 **No raw data leaves the hospital.** The client app only transmits trained model weights, not patient records or datasets.
+- 🔄 **Federated aggregation.** The central server aggregates weights from multiple hospitals (FedAvg), producing a global model without ever holding institutional data.
+- ⚠️ **Demo disclaimer.** The login and terms screens clearly indicate demo/reference mode. No credentials are stored or validated against a real backend.
+- ⚙️ **Configurable server endpoint.** Hospital staff can modify the server URL in the upload screen, supporting different institutional network configurations.
 
-Step 2 --- Install dependencies:
+---
 
-> pip install -r backend/requirements.txt
+## Limitations & Future Scope
 
-Step 3 --- Add your Gemini API key:
+- The current demo uses a single aggregation server with **no differential privacy** or secure multi-party computation. Adding noise injection before weight upload would further strengthen privacy guarantees.
+- The **login system is UI-only** and would need a proper authentication backend (JWT tokens, role-based access) in production.
+- The aggregation strategy (FedAvg or otherwise) is implemented server-side and is outside the scope of the client codebase.
+- The web portal currently performs inference against a **single aggregated model**; future versions could support model versioning and rollback.
 
-Open backend/.env and replace the placeholder:
+---
 
-> GEMINI_API_KEY=your_actual_key_here
+## Project Info
 
-Step 4 --- Run the FastAPI server:
+| | |
+|---|---|
+| **Project ID** | PS-18 |
+| **Domain** | Healthcare AI / Privacy Preserving ML |
+| **Documentation Date** | April 2026 |
 
-> cd backend
->
-> python main.py
+---
 
-The API will be available at http://localhost:8000
+## Team
 
-Interactive docs available at http://localhost:8000/docs
-
-**4.3 Frontend Setup**
-
-No build step required. Simply open frontend/index.html in a browser
-while the FastAPI backend is running.
-
-For best results, serve via a local server to avoid CORS issues:
-
-> cd frontend
->
-> python -m http.server 5500
-
-Then visit http://localhost:5500 in your browser.
-
-**4.4 Desktop App Setup**
-
-Make sure your venv is activated and tkinter is installed, then run:
-
-> python app.py
-
-If you see ModuleNotFoundError, install missing packages:
-
-> pip install pandas numpy scikit-learn pillow
-
-**5. API Reference**
-
-**POST /api/diabetes/predict**
-
-  ------------------------- ------------------------------------------------
-  **Endpoint**              /api/diabetes/predict
-
-  **Method**                POST
-
-  **Body**                  JSON
-
-  **gender**                String: Male / Female / Other
-
-  **age**                   Float
-
-  **hypertension**          Int: 0 or 1
-
-  **heart_disease**         Int: 0 or 1
-
-  **smoking_history**       String: never / former / current / not current /
-                            ever
-
-  **bmi**                   Float (e.g. 27.5)
-
-  **HbA1c_level**           Float (e.g. 5.5)
-
-  **blood_glucose_level**   Int (mg/dL)
-  ------------------------- ------------------------------------------------
-
-**POST /api/heart/predict**
-
-  ---------------------- ------------------------------------------------
-  **Endpoint**           /api/heart/predict
-
-  **Method**             POST
-
-  **Body**               JSON
-
-  **age**                Int
-
-  **gender**             String: Male / Female
-
-  **chest_pain**         Int: 0-3
-
-  **rest_bp**            Int (mmHg)
-
-  **cholesterol**        Int (mg/dL)
-
-  **fasting_bs**         Int: 0 or 1
-
-  **rest_ecg**           Int: 0-2
-
-  **max_hr**             Int (bpm)
-
-  **exercise_angina**    Int: 0 or 1
-
-  **st_depression**      Float
-
-  **st_slope**           Int: 0-2
-
-  **num_vessels**        Int: 0-3
-
-  **thalassemia**        Int: 1-3
-  ---------------------- ------------------------------------------------
-
-**POST /api/xray/predict**
-
-  ---------------------- ------------------------------------------------
-  **Endpoint**           /api/xray/predict
-
-  **Method**             POST
-
-  **Body**               multipart/form-data
-
-  **file**               Image file (PNG, JPG, JPEG)
-  ---------------------- ------------------------------------------------
-
-**Response Format (all endpoints)**
-
-> { \"prediction\": 1, \"probability\": 0.87, \"diagnosis\":
-> \"Diabetic\",
->
-> \"risk_level\": \"High\", \"treatment_plan\": \"\...\", \"disease\":
-> \"diabetes\" }
-
-**6. Plugging In Real Models**
-
-Each model file contains a placeholder prediction function with clear
-comments showing exactly where to swap in your trained model. For
-example, in backend/models/diabetes_model.py:
-
-> \# Replace the dummy logic below with:
->
-> \# import pickle
->
-> \# model = pickle.load(open(\'diabetes_model.pkl\', \'rb\'))
->
-> \# prob = model.predict_proba(features)\[0\]\[1\]
-
-Similarly, xray_model.py shows the Keras/TensorFlow pattern for image
-models. Save your .pkl, .h5, or .pt files in the backend/models/
-directory and update the relevant function.
-
-**7. Building the Desktop App as .exe**
-
-To package app.py as a standalone Windows executable:
-
-> pip install pyinstaller
->
-> pyinstaller \--onefile \--windowed \\
->
-> \--hidden-import=pandas \\
->
-> \--hidden-import=numpy \\
->
-> \--hidden-import=sklearn \\
->
-> \--hidden-import=PIL \\
->
-> app.py
-
-The output .exe will be in the dist/ folder. If the app crashes
-silently, run it from cmd to see the error:
-
-> app.exe & pause
-
-**8. Known Issues & Troubleshooting**
-
-**tkinter not found**
-
-Reinstall Python 3.10 using the official .exe installer from python.org.
-During installation, choose Customize Installation and ensure tcl/tk and
-IDLE is checked.
-
-**ModuleNotFoundError when running .exe**
-
-Add the missing module as a \--hidden-import flag when running
-PyInstaller. Common ones: pandas, numpy, sklearn, PIL, tkinter.
-
-**CORS error in browser**
-
-Make sure the FastAPI server is running. The backend includes CORS
-middleware allowing all origins. If issues persist, serve the frontend
-via a local HTTP server instead of opening the file directly.
-
-**Gemini API not responding**
-
-Verify your GEMINI_API_KEY in backend/.env is correct. The system
-automatically falls back to hardcoded treatment plans if the API call
-fails.
-
-**ev.txt / requirements file not found**
-
-Make sure the requirements file is in the same folder as your
-terminal\'s working directory, or provide the full path: pip install -r
-C:\\full\\path\\to\\ev.txt
-
-**9. Disclaimer**
-
-*This application is for demonstration and educational purposes only. It
-does not constitute medical advice and should not be used as a
-substitute for professional medical diagnosis or treatment. Always
-consult a qualified healthcare professional.*
-
-✚ MediCare AI \| Built with FastAPI + Gemini AI \| 2026
+| Name | Role |
+|---|---|
+| [Ravi Prakash Nag](https://github.com/divyanshagrawal51) 
+| [Divyansh Agrawal](https://github.com/Devil-Gaming-Studios)
