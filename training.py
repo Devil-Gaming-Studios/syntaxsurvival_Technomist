@@ -13,6 +13,7 @@ SERVER_URL = "https://syntaxsurvival-technomist-2.onrender.com"
 trained_model  = None
 last_config    = None
 last_model_id  = None
+last_history   = None   # NEW: stores {"loss": [...], "accuracy": [...]}
 
 
 # ================================
@@ -81,11 +82,10 @@ def _default_models():
 # ================================
 def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
 
-    global trained_model, last_config
+    global trained_model, last_config, last_model_id, last_history
 
     data = pd.read_csv(file_path)
 
-    # ✅ FIX: encode non-numeric columns so mixed-type CSVs don't crash
     for col in data.columns:
         if data[col].dtype == object:
             data[col] = pd.Categorical(data[col]).codes
@@ -93,9 +93,8 @@ def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].values
 
-    # Normalize safely
     X = X / (np.max(X, axis=0) + 1e-8)
-    # ... rest unchanged
+
     # ================================
     # 🧠 CONFIG
     # ================================
@@ -106,15 +105,11 @@ def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
                 timeout=10
             ).json()
         except Exception:
-            # Server unreachable — fall back to auto config
             config = suggest_model_config(X, y)
 
-        # ✅ FIX: Always override input_size with actual data shape
-        # Server config may have been saved for a different dataset
         config["num_classes"] = int(len(np.unique(y)))
-        config["input_size"]  = int(X.shape[1])   # <-- this was the shape mismatch bug
+        config["input_size"]  = int(X.shape[1])
 
-        # If server didn't return a type/model, fill in defaults
         if "type" not in config:
             config["type"] = "tabular"
         if "model" not in config:
@@ -132,14 +127,15 @@ def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
     model = build_model_from_config(config)
 
     # ================================
-    # 🚀 TRAIN
+    # 🚀 TRAIN — capture history
     # ================================
-    model.fit(X, y, epochs=epochs, verbose=1)
+    history = model.fit(X, y, epochs=epochs, verbose=1)
 
     trained_model = model
     last_config   = config
+    last_model_id = model_id
+    last_history  = history.history   # NEW: e.g. {"loss": [...], "accuracy": [...]}
 
-    last_model_id = model_id   # ✅ ADD THIS
     return "Tabular training completed"
 
 
@@ -149,7 +145,7 @@ def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
 # ================================
 def train_image(folder_path, epochs, use_server_model=True, model_id="xray"):
 
-    global trained_model, last_config
+    global trained_model, last_config, last_model_id, last_history
 
     from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
@@ -167,14 +163,13 @@ def train_image(folder_path, epochs, use_server_model=True, model_id="xray"):
 
         if "num_classes" not in config:
             config["num_classes"] = 2
-        # ✅ Always enforce known-good image defaults
         if "type" not in config:
             config["type"] = "image"
         if "model" not in config:
             config["model"] = "cnn_small"
         if "output" not in config:
             config["output"] = "binary"
-        config["input_size"] = [128, 128, 3]  # fixed for ImageDataGenerator
+        config["input_size"] = [128, 128, 3]
 
     else:
         config = {
@@ -200,18 +195,19 @@ def train_image(folder_path, epochs, use_server_model=True, model_id="xray"):
         target_size=(128, 128),
         batch_size=16,
         class_mode='binary',
-        classes=['no', 'yes']   # ✅ FIX: ignore Br35H-Mask-RCNN folder
+        classes=['no', 'yes']
     )
 
     # ================================
-    # TRAIN
+    # TRAIN — capture history
     # ================================
-    model.fit(train_data, epochs=epochs)
+    history = model.fit(train_data, epochs=epochs)
 
     trained_model = model
     last_config   = config
+    last_model_id = model_id
+    last_history  = history.history   # NEW: e.g. {"loss": [...], "accuracy": [...]}
 
-    last_model_id = model_id   # ✅ ADD THIS
     return "Image training completed"
 
 
