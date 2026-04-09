@@ -1,8 +1,13 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Request
 import numpy as np
 from typing import Dict
-import gzip
-from fastapi import Request
+import requests as http_requests
+import json
+import io
+from PIL import Image
+from fastapi.responses import StreamingResponse
+import time
+
 
 app = FastAPI()
 
@@ -19,6 +24,31 @@ collected_weights = []
 custom_models     = []   # models added at runtime via /add_model
 custom_configs    = {}   # configs for custom models
 
+# ================================
+# 🤖 GEMINI HELPER
+# ================================
+GEMINI_API_KEY = "AIzaSyD2JE1mtrjdpdsaO3qBdHbvGGQcl5eyHkI"
+
+# ================================
+# 🤖 GEMINI HELPER (STREAMING)
+# ================================
+def ask_gemini_stream(prompt: str):
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        with http_requests.post(url, json=payload, stream=True, timeout=60) as res:
+            for line in res.iter_lines():
+                if line:
+                    line = line.decode("utf-8")
+                    if line.startswith("data:"):
+                        try:
+                            chunk = json.loads(line[5:])
+                            text  = chunk["candidates"][0]["content"]["parts"][0]["text"]
+                            yield text
+                        except Exception:
+                            continue
+    except Exception as e:
+        yield f"Treatment plan unavailable: {str(e)}"
 # ================================
 # 📦 MODEL LIST
 # ================================
@@ -132,19 +162,94 @@ def receive_weights(data: Dict):
             collected_weights.clear()
             return {"error": f"Aggregation failed: {str(e)}"}
     return {"status": "weights received"}
+# ================================
+# 🧮 MANUAL FORWARD PASS
+# ================================
+def manual_predict(x, weights, output_type="binary"):
+    try:
+        out        = x
+        num_layers = len(weights) // 2
+        for i in range(num_layers):
+            W   = np.array(weights[i * 2])
+            b   = np.array(weights[i * 2 + 1])
+            out = out @ W + b
+            if i < num_layers - 1:
+                out = np.maximum(0, out)
+        if output_type == "binary":
+            out = 1 / (1 + np.exp(-out))
+            return float(out.flatten()[0])
+        elif output_type == "multi_class":
+            e   = np.exp(out - np.max(out))
+            out = e / e.sum()
+            return float(np.argmax(out))
+        else:
+            return float(out.flatten()[0])
+    except Exception:
+        return 0.5
 
 # ================================
-# 🔮 TABULAR PREDICTION
+# 🔮 GENERIC PREDICT
 # ================================
-@app.post("/predict")
-def predict(data: Dict):
-    x = data.get("input", [])
-    result = sum(x) * 0.1  # dummy logic
-    return {"prediction": result}
+@app.post("/predict/{model_id}")
+async def predict(model_id: str, request: Request):
+    try:
+        config = get_model_config(model_id)
+        if not config:
+            return {"prediction": "Error", "treatment": f"Unknown model: {model_id}"}
 
-# ================================
-# 🖼️ IMAGE PREDICTION (DEMO)
-# ================================
-@app.post("/predict_image")
-async def predict_image(file: UploadFile = File(...)):
-    return {"prediction": "Pneumonia (demo)"}
+        model_type  = config.get("type", "tabular")
+        output_type = config.get("output", "binary")
+        weights     = global_models.get(model_id)
+        label       = model_id.replace("_", " ").title()
+
+        if model_type == "image":
+            form    = await request.form()
+            file    = form.get("file")
+            content = await file.read()
+            img = Image.open(io.BytesIO(content)).convert("RGB").resize((128, 128))
+            x   = np.array(img, dtype=float) / 255.0
+            x   = x.flatten().reshape(1, -1)
+            data = {}
+        else:
+            body = await request.body()
+            data = json.loads(body)
+            x    = np.array([list(data.values())], dtype=float)
+            x    = x / (np.max(x) + 1e-8)
+
+        if weights:
+            raw = manual_predict(x, weights, output_type)
+        else:
+            raw = 0.5
+
+        if output_type == "binary":
+            result = f"{label} Detected" if raw > 0.5 else f"No {label} Detected"
+        elif output_type == "multi_class":
+            result = f"Class {int(raw)}"
+        else:
+            result = f"Value: {round(raw, 4)}"
+
+        if model_type == "image":
+            prompt = f"""
+            A medical image was submitted for {label} screening.
+            AI Prediction: {result}.
+            Provide a brief personalised treatment plan in 4-5 bullet points.
+            """
+        else:
+            prompt = f"""
+            A patient was screened for {label} with the following data: {data}.
+            AI Prediction: {result}.
+            Provide a brief personalised treatment and lifestyle plan in 4-5 bullet points.
+            """
+
+           def stream():
+                # First send prediction as a JSON line
+                yield json.dumps({"prediction": result}) + "\n"
+                # Then stream treatment word by word
+                for chunk in ask_gemini_stream(prompt):
+                    yield json.dumps({"treatment_chunk": chunk}) + "\n"
+    
+            return StreamingResponse(stream(), media_type="text/event-stream")
+    except Exception as e:
+        return {"prediction": "Error", "treatment": str(e)}
+
+
