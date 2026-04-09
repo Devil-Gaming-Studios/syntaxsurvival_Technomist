@@ -1,15 +1,24 @@
 from fastapi import FastAPI, UploadFile, File, Request
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
 from typing import Dict
 import requests as http_requests
 import json
 import io
 from PIL import Image
-from fastapi.responses import StreamingResponse
-import time
-
 
 app = FastAPI()
+
+# ================================
+# 🌐 CORS — allow website to call API
+# ================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ================================
 # 🧠 GLOBAL STORAGE
@@ -21,20 +30,17 @@ global_models = {
 }
 
 collected_weights = {}
-custom_models     = []   # models added at runtime via /add_model
-custom_configs    = {}   # configs for custom models
+custom_models     = []
+custom_configs    = {}
 
 # ================================
-# 🤖 GEMINI HELPER
+# 🤖 GEMINI
 # ================================
 GEMINI_API_KEY = "AIzaSyD2JE1mtrjdpdsaO3qBdHbvGGQcl5eyHkI"
 
-# ================================
-# 🤖 GEMINI HELPER (STREAMING)
-# ================================
 def ask_gemini_stream(prompt: str):
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
+        url     = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         with http_requests.post(url, json=payload, stream=True, timeout=60) as res:
             for line in res.iter_lines():
@@ -49,31 +55,32 @@ def ask_gemini_stream(prompt: str):
                             continue
     except Exception as e:
         yield f"Treatment plan unavailable: {str(e)}"
+
 # ================================
 # 📦 MODEL LIST
 # ================================
 @app.get("/models")
 def get_models():
     base_models = [
-            {
-                "id":          "diabetes",
-                "name":        "Diabetes Predictor",
-                "type":        "tabular",
-                "description": "Predicts diabetes risk from patient tabular data."
-            },
-            {
-                "id":          "heart",
-                "name":        "Heart Disease Model",
-                "type":        "tabular",
-                "description": "Evaluates cardiac indicators to assess heart disease risk."
-            },
-            {
-                "id":          "xray",
-                "name":        "Tumor Detection",
-                "type":        "image",
-                "description": "Analyzes imaging data to identify and classify tumor regions."
-            }
-        ]
+        {
+            "id":          "diabetes",
+            "name":        "Diabetes Predictor",
+            "type":        "tabular",
+            "description": "Predicts diabetes risk from patient tabular data."
+        },
+        {
+            "id":          "heart",
+            "name":        "Heart Disease Model",
+            "type":        "tabular",
+            "description": "Evaluates cardiac indicators to assess heart disease risk."
+        },
+        {
+            "id":          "xray",
+            "name":        "Tumor Detection",
+            "type":        "image",
+            "description": "Analyzes imaging data to identify and classify tumor regions."
+        }
+    ]
     return {"models": base_models + custom_models}
 
 # ================================
@@ -84,13 +91,13 @@ def get_model_config(model_id: str):
     configs = {
         "diabetes": {
             "type":       "tabular",
-            "input_size": 3,
+            "input_size": 8,
             "model":      "dense_small",
             "output":     "binary"
         },
         "heart": {
             "type":       "tabular",
-            "input_size": 5,       # input_size is overridden by actual data in training.py
+            "input_size": 5,
             "model":      "dense_medium",
             "output":     "binary"
         },
@@ -108,15 +115,14 @@ def get_model_config(model_id: str):
 # ================================
 @app.post("/add_model")
 def add_model(data: Dict):
-    model_id   = data.get("id", "").strip().lower().replace(" ", "_")
-    model_name = data.get("name", "").strip()
-    model_type = data.get("type", "tabular")
+    model_id    = data.get("id",   "").strip().lower().replace(" ", "_")
+    model_name  = data.get("name", "").strip()
+    model_type  = data.get("type", "tabular")
     description = data.get("description", f"Custom {model_type} model.")
 
     if not model_id or not model_name:
         return {"error": "id and name are required"}
 
-    # Check for duplicates
     existing_ids = [m["id"] for m in custom_models]
     if model_id in existing_ids or model_id in ["diabetes", "heart", "xray"]:
         return {"error": f"Model '{model_id}' already exists"}
@@ -128,11 +134,10 @@ def add_model(data: Dict):
         "description": description,
     })
 
-    # Also create a default config for it
     custom_configs[model_id] = {
         "type":       model_type,
         "input_size": [128, 128, 3] if model_type == "image" else 10,
-        "model":      "cnn_small" if model_type == "image" else "dense_small",
+        "model":      "cnn_small"   if model_type == "image" else "dense_small",
         "output":     "binary",
     }
 
@@ -149,40 +154,40 @@ def receive_weights(data: Dict):
     if not model_id or weights is None:
         return {"error": "model_id and weights required"}
 
-    # 🔥 Create model entry if not exists
     if model_id not in collected_weights:
         collected_weights[model_id] = []
 
-    # ➕ Add weights
     collected_weights[model_id].append(weights)
 
-    # 🔄 Aggregate when enough weights collected
     if len(collected_weights[model_id]) >= 2:
         try:
-            first = collected_weights[model_id][0]
-            averaged = []
+            bucket = collected_weights[model_id]
+            first  = bucket[0]
+            second = bucket[1]
 
+            # Only aggregate if shapes match
+            if len(first) != len(second):
+                raise ValueError("Layer count mismatch")
+            for i in range(len(first)):
+                if np.array(first[i]).shape != np.array(second[i]).shape:
+                    raise ValueError("Shape mismatch")
+
+            averaged = []
             for layer_idx in range(len(first)):
-                layer_stack = [
-                    np.array(cw[layer_idx])
-                    for cw in collected_weights[model_id]
-                ]
-                avg_layer = np.mean(layer_stack, axis=0)
+                layer_stack = [np.array(cw[layer_idx]) for cw in bucket]
+                avg_layer   = np.mean(layer_stack, axis=0)
                 averaged.append(avg_layer.tolist())
 
-            # ✅ Store in correct model
             global_models[model_id] = averaged
-
-            # 🧹 Clear only that model’s weights
-            collected_weights[model_id].clear()
-
+            collected_weights[model_id] = []
             return {"status": f"{model_id} aggregated successfully"}
 
         except Exception as e:
-            collected_weights[model_id].clear()
-            return {"error": f"Aggregation failed: {str(e)}"}
+            collected_weights[model_id] = []
+            return {"status": "weights received", "note": str(e)}
 
-    return {"status": f"{model_id} weights added"}
+    return {"status": f"{model_id} weights received"}
+
 # ================================
 # 🧮 MANUAL FORWARD PASS
 # ================================
@@ -195,9 +200,10 @@ def manual_predict(x, weights, output_type="binary"):
             b   = np.array(weights[i * 2 + 1])
             out = out @ W + b
             if i < num_layers - 1:
-                out = np.maximum(0, out)
+                out = np.maximum(0, out)  # ReLU on hidden layers
+
         if output_type == "binary":
-            out = 1 / (1 + np.exp(-out))
+            out = 1 / (1 + np.exp(-out))  # Sigmoid
             return float(out.flatten()[0])
         elif output_type == "multi_class":
             e   = np.exp(out - np.max(out))
@@ -218,30 +224,30 @@ async def predict(model_id: str, request: Request):
         if not config:
             return {"prediction": "Error", "treatment": f"Unknown model: {model_id}"}
 
-        model_type  = config.get("type", "tabular")
+        model_type  = config.get("type",   "tabular")
         output_type = config.get("output", "binary")
         weights     = global_models.get(model_id)
         label       = model_id.replace("_", " ").title()
 
+        # ── Parse input ──
         if model_type == "image":
             form    = await request.form()
             file    = form.get("file")
             content = await file.read()
-            img = Image.open(io.BytesIO(content)).convert("RGB").resize((128, 128))
-            x   = np.array(img, dtype=float) / 255.0
-            x   = x.flatten().reshape(1, -1)
-            data = {}
+            img     = Image.open(io.BytesIO(content)).convert("RGB").resize((128, 128))
+            x       = np.array(img, dtype=float) / 255.0
+            x       = x.flatten().reshape(1, -1)
+            data    = {}
         else:
             body = await request.body()
             data = json.loads(body)
             x    = np.array([list(data.values())], dtype=float)
             x    = x / (np.max(x) + 1e-8)
 
-        if weights:
-            raw = manual_predict(x, weights, output_type)
-        else:
-            raw = 0.5
+        # ── Predict ──
+        raw = manual_predict(x, weights, output_type) if weights else 0.5
 
+        # ── Format result ──
         if output_type == "binary":
             result = f"{label} Detected" if raw > 0.5 else f"No {label} Detected"
         elif output_type == "multi_class":
@@ -249,6 +255,7 @@ async def predict(model_id: str, request: Request):
         else:
             result = f"Value: {round(raw, 4)}"
 
+        # ── Build Gemini prompt ──
         if model_type == "image":
             prompt = f"""
             A medical image was submitted for {label} screening.
@@ -262,15 +269,13 @@ async def predict(model_id: str, request: Request):
             Provide a brief personalised treatment and lifestyle plan in 4-5 bullet points.
             """
 
-           def stream():
-                # First send prediction as a JSON line
-                yield json.dumps({"prediction": result}) + "\n"
-                # Then stream treatment word by word
-                for chunk in ask_gemini_stream(prompt):
-                    yield json.dumps({"treatment_chunk": chunk}) + "\n"
-    
-            return StreamingResponse(stream(), media_type="text/event-stream")
+        # ── Stream response ──
+        def stream():
+            yield json.dumps({"prediction": result}) + "\n"
+            for chunk in ask_gemini_stream(prompt):
+                yield json.dumps({"treatment_chunk": chunk}) + "\n"
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
+
     except Exception as e:
         return {"prediction": "Error", "treatment": str(e)}
-
-
