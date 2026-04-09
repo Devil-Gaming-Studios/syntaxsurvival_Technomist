@@ -20,7 +20,7 @@ global_models = {
     "xray":     None,
 }
 
-collected_weights = []
+collected_weights = {}
 custom_models     = []   # models added at runtime via /add_model
 custom_configs    = {}   # configs for custom models
 
