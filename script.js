@@ -56,34 +56,39 @@ async function streamResult(fetchPromise) {
   document.getElementById("prediction").innerText = "Analysing...";
   document.getElementById("treatment").innerText  = "";
 
-  const res     = await fetchPromise;
-  const reader  = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer    = "";
+  try {
+    const res = await fetchPromise;
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer    = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop();
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
 
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const data = JSON.parse(line);
-        if (data.prediction) {
-          document.getElementById("prediction").innerText = "Prediction: " + data.prediction;
-        }
-        if (data.treatment_chunk) {
-          document.getElementById("treatment").innerText += data.treatment_chunk;
-        }
-      } catch (e) { continue; }
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const data = JSON.parse(line);
+          if (data.prediction) {
+            document.getElementById("prediction").innerText = "Prediction: " + data.prediction;
+          }
+          if (data.treatment_chunk) {
+            document.getElementById("treatment").innerText += data.treatment_chunk;
+          }
+        } catch (e) { continue; }
+      }
     }
+
+  } catch (e) {
+    document.getElementById("prediction").innerText = "Error: " + e.message;
+    document.getElementById("treatment").innerText  = "";
   }
 }
-
 // ================================
 // SUBMIT FUNCTIONS
 // ================================
