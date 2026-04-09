@@ -13,7 +13,7 @@ def build_model_from_config(config):
     # ================================
     if model_type == "tabular":
 
-        input_size = config.get("input_size")
+        input_size = int(config.get("input_size"))  # ✅ cast to plain Python int
 
         if model_name == "dense_small":
             model = tf.keras.Sequential([
@@ -44,7 +44,7 @@ def build_model_from_config(config):
     # ================================
     elif model_type == "image":
 
-        input_shape = tuple(config.get("input_size", (128, 128, 3)))
+        input_shape = tuple(int(x) for x in config.get("input_size", (128, 128, 3)))  # ✅ cast each dim
 
         if model_name == "cnn_small":
             model = tf.keras.Sequential([
@@ -105,20 +105,17 @@ def build_custom_model(input_size, layers, output_type="binary"):
 
     model = tf.keras.Sequential()
 
-    # Input layer
-    model.add(tf.keras.layers.Input(shape=(input_size,)))
+    model.add(tf.keras.layers.Input(shape=(int(input_size),)))  # ✅ cast to plain Python int
 
-    # Hidden layers
     for units in layers:
-        model.add(tf.keras.layers.Dense(units, activation='relu'))
+        model.add(tf.keras.layers.Dense(int(units), activation='relu'))  # ✅ cast each unit count
 
-    # Output layer
     if output_type == "binary":
         model.add(tf.keras.layers.Dense(1, activation='sigmoid'))
         loss = "binary_crossentropy"
 
     elif output_type == "multi_class":
-        model.add(tf.keras.layers.Dense(3, activation='softmax'))  # adjust classes if needed
+        model.add(tf.keras.layers.Dense(3, activation='softmax'))
         loss = "sparse_categorical_crossentropy"
 
     else:
@@ -143,18 +140,14 @@ def suggest_model_config(X, y):
 
     config = {}
 
-    # Detect tabular vs image
     if len(X.shape) == 2:
         config["type"] = "tabular"
-        config["input_size"] = X.shape[1]
-        config["model"] = "dense_small"
+        config["input_size"] = int(X.shape[1])          # ✅ was numpy.int64, now plain int
 
     elif len(X.shape) == 4:
         config["type"] = "image"
-        config["input_size"] = X.shape[1:]
-        config["model"] = "cnn_small"
+        config["input_size"] = [int(x) for x in X.shape[1:]]  # ✅ cast each dim
 
-    # Detect output type
     unique_values = len(np.unique(y))
 
     if unique_values == 2:
