@@ -143,25 +143,46 @@ def add_model(data: Dict):
 # ================================
 @app.post("/send_weights")
 def receive_weights(data: Dict):
-    weights = data.get("weights")
-    if weights is None:
-        return {"error": "No weights provided"}
-    collected_weights.append(weights)
-    if len(collected_weights) >= 2:
+    model_id = data.get("model_id")
+    weights  = data.get("weights")
+
+    if not model_id or weights is None:
+        return {"error": "model_id and weights required"}
+
+    # 🔥 Create model entry if not exists
+    if model_id not in collected_weights:
+        collected_weights[model_id] = []
+
+    # ➕ Add weights
+    collected_weights[model_id].append(weights)
+
+    # 🔄 Aggregate when enough weights collected
+    if len(collected_weights[model_id]) >= 2:
         try:
-            first = collected_weights[0]
+            first = collected_weights[model_id][0]
             averaged = []
+
             for layer_idx in range(len(first)):
-                layer_stack = [np.array(cw[layer_idx]) for cw in collected_weights]
+                layer_stack = [
+                    np.array(cw[layer_idx])
+                    for cw in collected_weights[model_id]
+                ]
                 avg_layer = np.mean(layer_stack, axis=0)
                 averaged.append(avg_layer.tolist())
-            global_models["heart"] = averaged
-            collected_weights.clear()
-            return {"status": "weights received and aggregated"}
+
+            # ✅ Store in correct model
+            global_models[model_id] = averaged
+
+            # 🧹 Clear only that model’s weights
+            collected_weights[model_id].clear()
+
+            return {"status": f"{model_id} aggregated successfully"}
+
         except Exception as e:
-            collected_weights.clear()
+            collected_weights[model_id].clear()
             return {"error": f"Aggregation failed: {str(e)}"}
-    return {"status": "weights received"}
+
+    return {"status": f"{model_id} weights added"}
 # ================================
 # 🧮 MANUAL FORWARD PASS
 # ================================
