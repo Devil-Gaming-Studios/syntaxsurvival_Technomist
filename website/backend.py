@@ -22,9 +22,24 @@ collected_weights = []
 def get_models():
     return {
         "models": [
-            {"id": "diabetes", "name": "Diabetes Predictor", "type": "tabular"},
-            {"id": "heart",    "name": "Heart Disease",       "type": "tabular"},
-            {"id": "xray",     "name": "X-ray Classifier",    "type": "image"}
+            {
+                "id":          "diabetes",
+                "name":        "Diabetes Predictor",
+                "type":        "tabular",
+                "description": "Predicts diabetes risk from patient tabular data."
+            },
+            {
+                "id":          "heart",
+                "name":        "Heart Disease Model",
+                "type":        "tabular",
+                "description": "Evaluates cardiac indicators to assess heart disease risk."
+            },
+            {
+                "id":          "xray",
+                "name":        "Tumor Detection",
+                "type":        "image",
+                "description": "Analyzes imaging data to identify and classify tumor regions."
+            }
         ]
     }
 
