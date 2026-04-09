@@ -14,6 +14,7 @@ trained_model  = None
 last_config    = None
 last_model_id  = None
 last_history   = None   # NEW: stores {"loss": [...], "accuracy": [...]}
+last_X_max     = None   # FIX: stores per-column training max for consistent normalization
 
 
 # ================================
@@ -82,7 +83,7 @@ def _default_models():
 # ================================
 def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
 
-    global trained_model, last_config, last_model_id, last_history
+    global trained_model, last_config, last_model_id, last_history, last_X_max
 
     data = pd.read_csv(file_path)
 
@@ -93,7 +94,8 @@ def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].values
 
-    X = X / (np.max(X, axis=0) + 1e-8)
+    last_X_max = np.max(X, axis=0) + 1e-8   # FIX: save before normalizing
+    X = X / last_X_max
 
     # ================================
     # 🧠 CONFIG
@@ -231,13 +233,16 @@ def detect_data_type(path):
 # ================================
 def predict_disease(input_data):
 
-    global trained_model, last_config
+    global trained_model, last_config, last_X_max
 
     if trained_model is None:
         return "❌ Model not trained yet"
 
     X = np.array(input_data).reshape(1, -1)
-    X = X / (np.max(X) + 1e-8)
+    if last_X_max is not None:
+        X = X / last_X_max          # FIX: use training-time per-column max
+    else:
+        X = X / (np.max(X) + 1e-8)
 
     prediction = trained_model.predict(X)
 
@@ -262,6 +267,7 @@ def upload_weights():
         return {"error": "❌ No model to upload"}
 
     weights      = trained_model.get_weights()
+    print(weights)
     weights_list = [w.tolist() for w in weights]
 
     try:
@@ -323,10 +329,7 @@ def predict_from_file(path):
         list of (sample_label: str, prediction: str, confidence: str)
         On error raises an exception (caller handles it).
     """
-    global trained_model, last_config
-
-    if trained_model is None:
-        raise RuntimeError("No trained model found. Please train a model first.")
+    global trained_model, last_config, last_X_max
 
     data_type = detect_data_type(path)
 
@@ -338,21 +341,36 @@ def predict_from_file(path):
             if data[col].dtype == object:
                 data[col] = pd.Categorical(data[col]).codes
 
-        # Use the last column as ground-truth label if it exists
-        if data.shape[1] > 1:
+# REPLACE with:
+        n_features = last_X_max.shape[0] if last_X_max is not None else None
+
+        if n_features is not None and data.shape[1] == n_features:
+            # No label column present — test file has only features
+            labels = [f"Row {i+1}" for i in range(len(data))]
+            X = data.values.astype(float)
+        elif data.shape[1] > 1:
             labels = data.iloc[:, -1].values.astype(str)
             X = data.iloc[:, :-1].values.astype(float)
         else:
             labels = [f"Row {i+1}" for i in range(len(data))]
             X = data.values.astype(float)
 
-        X = X / (np.max(X, axis=0) + 1e-8)
+        # REPLACE with:
+        if last_X_max is not None:
+            expected = last_X_max.shape[0]
+            if X.shape[1] == expected + 1:
+                # label column wasn't stripped — drop the last column
+                X = X[:, :-1]
+            X = X / last_X_max
+        else:
+            X = X / (np.max(X, axis=0) + 1e-8)
 
         raw = trained_model.predict(X)
 
         results = []
         output_type = last_config.get("output", "binary") if last_config else "binary"
-
+        correct = 0
+        total = len(labels)
         for i, (row_label, pred_raw) in enumerate(zip(labels, raw)):
             sample_lbl = f"Row {i+1} (GT: {row_label})"
 
@@ -360,19 +378,33 @@ def predict_from_file(path):
                 prob = float(pred_raw[0])
                 pred_str = "Disease Detected" if prob > 0.5 else "No Disease"
                 conf_str = f"{prob*100:.1f}%"
+                try:
+                    gt = int(row_label)
+                    pred_class = 1 if prob > 0.5 else 0
+                    if pred_class == gt:
+                        correct += 1
+                except:
+                    pass
 
             elif output_type == "multi_class":
                 cls = int(np.argmax(pred_raw))
                 prob = float(np.max(pred_raw))
                 pred_str = f"Class {cls}"
                 conf_str = f"{prob*100:.1f}%"
+                try:
+                    gt = int(row_label)
+                    if cls == gt:
+                        correct += 1
+                except:
+                    pass
 
             else:  # regression
                 val = float(pred_raw[0])
                 pred_str = f"{val:.4f}"
                 conf_str = "—"
 
-            results.append((sample_lbl, pred_str, conf_str))
+           
+            results.append((sample_lbl, pred_str, conf_str,correct))
 
         return results
 
@@ -407,21 +439,36 @@ def predict_from_file(path):
                         prob = float(pred_raw[0][0])
                         pred_str = "Detected (Yes)" if prob > 0.5 else "Not Detected (No)"
                         conf_str = f"{prob*100:.1f}%"
+                        try:
+                            gt = int(row_label)
+                            pred_class = 1 if prob > 0.5 else 0
+                            if pred_class == gt:
+                                correct += 1
+                        except:
+                            pass
                     elif output_type == "multi_class":
                         cls  = int(np.argmax(pred_raw[0]))
                         prob = float(np.max(pred_raw[0]))
                         pred_str = f"Class {cls}"
                         conf_str = f"{prob*100:.1f}%"
+                        try:
+                            gt = int(row_label)
+                            if cls == gt:
+                                correct += 1
+                        except:
+                            pass
                     else:
                         val = float(pred_raw[0][0])
                         pred_str = f"{val:.4f}"
                         conf_str = "—"
-
-                    results.append((sample_lbl, pred_str, conf_str))
+            
+                    results.append((sample_lbl, pred_str, conf_str,correct))
 
                 except Exception as img_err:
-                    results.append((sample_lbl, f"Error: {img_err}", ""))
+                    results.append((sample_lbl, f"Error: {img_err}", "",""))
+        
 
+        
         if not results:
             raise RuntimeError(
                 "No image files found in the selected folder.\n"
