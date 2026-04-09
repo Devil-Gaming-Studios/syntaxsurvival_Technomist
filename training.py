@@ -5,80 +5,98 @@ import os
 
 from model import build_model_from_config, suggest_model_config
 
-# 🔹 CHANGE THIS
 SERVER_URL = "https://syntaxsurvival-technomist-2.onrender.com"
 
 # ================================
-# 📊 TABULAR DATA TRAINING
+# 🧠 GLOBAL STORAGE
+# ================================
+trained_model = None
+last_config = None
+
+
+# ================================
+# 📊 TABULAR TRAINING
 # ================================
 def train_tabular(file_path, epochs, use_server_model=True, model_id=None):
 
-    # Load CSV
+    global trained_model, last_config
+
     data = pd.read_csv(file_path)
 
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].values
 
-    # Normalize
-    X = X / np.max(X, axis=0)
+    # Normalize safely
+    X = X / (np.max(X, axis=0) + 1e-8)
 
     # ================================
-    # 🧠 Get Model Config
+    # 🧠 CONFIG
     # ================================
     if use_server_model and model_id:
         config = requests.get(
             f"{SERVER_URL}/model_config?model_id={model_id}"
         ).json()
+
+        # 🔴 IMPORTANT FIX
+        if "num_classes" not in config:
+            config["num_classes"] = len(np.unique(y))
+
     else:
         config = suggest_model_config(X, y)
 
     # ================================
-    # 🏗️ Build Model
+    # 🏗️ MODEL
     # ================================
     model = build_model_from_config(config)
 
     # ================================
-    # 🚀 Train
+    # 🚀 TRAIN
     # ================================
-    model.fit(X, y, epochs, verbose=1)
+    model.fit(X, y, epochs=epochs, verbose=1)
 
-    # ================================
-    # 📤 Send Weights
-    # ================================
-    send_weights(model)
+    # Save globally
+    trained_model = model
+    last_config = config
 
     return "Tabular training completed"
 
 
 # ================================
-# 🖼️ IMAGE DATA TRAINING
+# 🖼️ IMAGE TRAINING
 # ================================
-def train_image(folder_path,epochs, use_server_model=True, model_id="xray"):
+def train_image(folder_path, epochs, use_server_model=True, model_id="xray"):
+
+    global trained_model, last_config
 
     from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
     # ================================
-    # 🧠 Get Model Config
+    # CONFIG
     # ================================
     if use_server_model:
         config = requests.get(
             f"{SERVER_URL}/model_config?model_id={model_id}"
         ).json()
+
+        if "num_classes" not in config:
+            config["num_classes"] = 2
+
     else:
         config = {
             "type": "image",
             "input_size": [128, 128, 3],
             "model": "cnn_small",
-            "output": "binary"
+            "output": "binary",
+            "num_classes": 2
         }
 
     # ================================
-    # 🏗️ Build Model
+    # MODEL
     # ================================
     model = build_model_from_config(config)
 
     # ================================
-    # 📁 Load Image Data
+    # DATA
     # ================================
     datagen = ImageDataGenerator(rescale=1./255)
 
@@ -90,20 +108,18 @@ def train_image(folder_path,epochs, use_server_model=True, model_id="xray"):
     )
 
     # ================================
-    # 🚀 Train
+    # TRAIN
     # ================================
-    model.fit(train_data, epochs)
+    model.fit(train_data, epochs=epochs)
 
-    # ================================
-    # 📤 Send Weights
-    # ================================
-    send_weights(model)
+    trained_model = model
+    last_config = config
 
     return "Image training completed"
 
 
 # ================================
-# 🔍 AUTO DETECT DATA TYPE
+# 🔍 DETECT DATA TYPE
 # ================================
 def detect_data_type(path):
 
@@ -118,11 +134,43 @@ def detect_data_type(path):
 
 
 # ================================
-# 📤 SEND WEIGHTS TO SERVER
+# 🧪 TEST / PREDICT FUNCTION
 # ================================
-def send_weights(model):
+def predict_disease(input_data):
 
-    weights = model.get_weights()
+    global trained_model, last_config
+
+    if trained_model is None:
+        return "❌ Model not trained yet"
+
+    X = np.array(input_data).reshape(1, -1)
+
+    # Normalize same as training
+    X = X / (np.max(X) + 1e-8)
+
+    prediction = trained_model.predict(X)
+
+    if last_config["output"] == "binary":
+        return "Disease Detected" if prediction[0][0] > 0.5 else "No Disease"
+
+    elif last_config["output"] == "multi_class":
+        return f"Class: {np.argmax(prediction)}"
+
+    else:
+        return f"Value: {prediction[0][0]}"
+
+
+# ================================
+# 📤 MANUAL UPLOAD (CONTROLLED)
+# ================================
+def upload_weights():
+
+    global trained_model
+
+    if trained_model is None:
+        return "❌ No model to upload"
+
+    weights = trained_model.get_weights()
     weights_list = [w.tolist() for w in weights]
 
     response = requests.post(
@@ -130,26 +178,21 @@ def send_weights(model):
         json={"weights": weights_list}
     )
 
-    print("Server Response:", response.json())
+    return response.json()
 
 
 # ================================
-# 🚀 MAIN TRAIN FUNCTION (USE THIS)
+# 🚀 MAIN TRAIN FUNCTION
 # ================================
-def train_and_upload(path, use_server_model=True, model_id=None):
+def train_and_upload(path, epochs, use_server_model=True, model_id=None):
 
     data_type = detect_data_type(path)
 
-
-
     if data_type == "tabular":
-        return train_tabular(path, use_server_model, model_id)
+        return train_tabular(path, epochs, use_server_model, model_id)
 
     elif data_type == "image":
-        return train_image(path, use_server_model, model_id)
+        return train_image(path, epochs, use_server_model, model_id)
 
     else:
         return "Unsupported data format"
-#==========================================
-#testing data is not yet processed
-#uploads data automatically
