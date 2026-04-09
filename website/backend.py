@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File
 import numpy as np
 from typing import Dict
+import gzip
+from fastapi import Request
 
 app = FastAPI()
 
@@ -110,7 +112,13 @@ def add_model(data: Dict):
 # 📤 RECEIVE WEIGHTS
 # ================================
 @app.post("/send_weights")
-def receive_weights(data: Dict):
+async def receive_weights(request: Request):
+
+    body = await request.body()
+    if request.headers.get("Content-Encoding") == "gzip":
+        body = gzip.decompress(body)
+
+    data    = json.loads(body)
     weights = data.get("weights")
 
     if weights is None:
