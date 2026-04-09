@@ -324,8 +324,15 @@ class MainScreen(tk.Frame):
         models = get_models()
         self.status.config(text="")
 
+        self.model_data = {}
+
         for key, title, desc in models:
-            self._make_card(cards_frame, key, title, desc)
+            card = self._make_card(cards_frame, key, title, desc)
+            self.model_data[key] = {
+                "title": title.lower(),
+                "desc": desc.lower(),
+                "card": card
+    }
 
         custom_frame = tk.Frame(self, bg=BG)
         custom_frame.pack(padx=200, fill="x", pady=(12, 0))
@@ -384,7 +391,37 @@ class MainScreen(tk.Frame):
 
         self.card_frames[key] = card
         return card
+    
+    def do_search(self):
+        query = self.search_var.get().strip().lower()
+        self.search_var.trace("w", lambda *args: self.do_search())
 
+        if not query:
+            # Show all cards
+            for data in self.model_data.values():
+                data["card"].pack_forget()
+                data["card"].pack(side="left", expand=True, fill="x", padx=(0, 12))
+            self.status.config(text="")
+            return
+
+        found = False
+
+        for key, data in self.model_data.items():
+            title = data["title"]
+            desc  = data["desc"]
+            card  = data["card"]
+
+            if query in title or query in desc:
+                card.pack_forget()
+                card.pack(side="left", expand=True, fill="x", padx=(0, 12))
+                found = True
+            else:
+                card.pack_forget()
+
+        if found:
+            self.status.config(text=f'Results for "{query}"', fg=GREEN_DARK)
+        else:
+            self.status.config(text="No matching models found.", fg="red")
     def _select(self, key, card, title):
         for k, c in self.card_frames.items():
             c.config(highlightbackground=BORDER, highlightthickness=2, bg=WHITE)
