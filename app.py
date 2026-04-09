@@ -7,6 +7,20 @@ from tkinter import filedialog
 from tkinter import messagebox
 import tkinter.font as tkfont
 
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+
+app = FastAPI()
+
+@app.get("/download")
+def download_app():
+    return FileResponse(
+        path="app.exe", 
+        filename="MediCareAI.exe", 
+        media_type="application/octet-stream"
+    )
+
+
 # ─────────────────────────────────────────
 #  IMPORT APP LOGIC
 # ─────────────────────────────────────────
